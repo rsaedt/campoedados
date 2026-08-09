@@ -1,0 +1,62 @@
+services:
+  - type: web
+    name: campoedados-staging-api
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: python -m pip install -e .
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /ready
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.15
+      - key: CAMPOEDADOS_ENV
+        value: staging
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: CAMPOEDADOS_DB_POOL_SIZE
+        value: "5"
+      - key: CAMPOEDADOS_DB_MAX_OVERFLOW
+        value: "2"
+      - key: CAMPOEDADOS_DB_POOL_TIMEOUT
+        value: "15"
+      - key: CAMPOEDADOS_DB_POOL_RECYCLE
+        value: "1800"
+      - key: CAMPOEDADOS_DB_NULL_POOL
+        value: "false"
+      - key: CAMPOEDADOS_MEDIA_STORAGE
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CAMPOEDADOS_SUPABASE_STORAGE_BUCKET
+        value: campoedados-staging-media
+      - key: CAMPOEDADOS_MAX_UPLOAD_BYTES
+        value: "20971520"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CAMPOEDADOS_OPENAI_VISION_MODEL
+        value: gpt-5-mini
+      - key: CAMPOEDADOS_OPENAI_TRANSCRIBE_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: CAMPOEDADOS_WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: CAMPOEDADOS_WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: CAMPOEDADOS_WHATSAPP_APP_SECRET
+        sync: false
+      - key: CAMPOEDADOS_WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: CAMPOEDADOS_WHATSAPP_GRAPH_VERSION
+        sync: false
+      - key: CAMPOEDADOS_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: CAMPOEDADOS_TELEGRAM_SECRET_TOKEN
+        sync: false
+      - key: CAMPOEDADOS_TELEGRAM_BOTS_JSON
+        sync: false
