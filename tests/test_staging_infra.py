@@ -104,6 +104,7 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     body = response.json()
     assert body["status"] == "ready"
     assert body["environment"] == "staging"
-    assert body["version"] == "0.6.3"
+    assert body["version"] == "0.6.5"
     assert body["channel_accounts_in_database"] is True
     assert body["controlled_onboarding"] is True
+    assert body["controlled_admin_ops"] is True
