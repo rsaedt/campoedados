@@ -140,6 +140,22 @@ class EventModuleTarget(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), index=True)
     module_code: Mapped[str] = mapped_column(ForeignKey("system_modules.code"), index=True)
+    status: Mapped[str] = mapped_column(String(40), default=EventStatus.RECEIVED.value, nullable=False)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class EventDocument(Base):
+    __tablename__ = "event_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), index=True)
+    document_type: Mapped[str] = mapped_column(String(40), default="attachment", nullable=False)
+    filename: Mapped[str | None] = mapped_column(String(255))
+    mime_type: Mapped[str | None] = mapped_column(String(120))
+    storage_ref: Mapped[str | None] = mapped_column(String(500))
+    sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    extracted_data: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class Approval(Base):
@@ -147,6 +163,7 @@ class Approval(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     event_id: Mapped[str] = mapped_column(ForeignKey("events.id"), index=True)
+    module_code: Mapped[str | None] = mapped_column(ForeignKey("system_modules.code"), index=True)
     approver_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     decision: Mapped[str] = mapped_column(String(30), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
@@ -267,8 +284,12 @@ class Transfer(Base):
     dispatch_event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id"), index=True)
     receipt_event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id"), index=True)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    declared_quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    declared_unit: Mapped[str | None] = mapped_column(String(20))
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     total_value: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    received_quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    divergence_quantity: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     status: Mapped[str] = mapped_column(String(30), default=TransferStatus.IN_TRANSIT.value, nullable=False)
     dispatched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
