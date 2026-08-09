@@ -1,10 +1,10 @@
-# Base 06 — Ambiente real de homologação
+# Base 06 / 06.1 — Ambiente real de homologação
 
 ## Objetivo
 
-Levar o Campo e Dados da validação em CI para um ambiente persistente, público por HTTPS e preparado para receber webhooks reais.
+Levar o Campo e Dados para um ambiente persistente, público por HTTPS e preparado para receber webhooks reais, sem transformar dados de cliente em configuração do servidor.
 
-Arquitetura de homologação:
+Arquitetura:
 
 ```text
 WhatsApp / Telegram / API
@@ -12,14 +12,21 @@ WhatsApp / Telegram / API
           v
 Render — campoedados-staging-api
           |
-          +--> PostgreSQL Supabase (dados estruturados)
+          +--> PostgreSQL Supabase (clientes, usuários, módulos, eventos, estoques)
           |
           +--> Supabase Storage privado (foto, PDF, áudio)
           |
           +--> OpenAI (transcrição/leitura documental)
 ```
 
-Produção não é criada nesta base. Homologação deve usar projeto Supabase, credenciais, bucket e serviço Render próprios.
+## Princípio de configuração
+
+A Base 06.1 corrige a primeira versão da homologação:
+
+> Variável de ambiente = segredo/configuração da infraestrutura.  
+> Banco de dados = cliente, usuário, unidade, módulo, permissão e configuração operacional.
+
+Portanto, organização, administrador, unidades, módulos contratados e identidades de canal **não são mais variáveis do Render**.
 
 ## Banco
 
@@ -27,150 +34,141 @@ Produção não é criada nesta base. Homologação deve usar projeto Supabase, 
 - `MIGRATION_DATABASE_URL`: conexão usada exclusivamente pelo Alembic.
 - URLs `postgres://` e `postgresql://` são normalizadas para `postgresql+psycopg://`.
 - Porta `6543` é reconhecida como transaction pooler e usa `NullPool` automaticamente.
-- Para backend persistente, preferir conexão adequada ao ambiente e manter pool pequeno.
 
-Cada deploy executa:
+Cada deploy executa somente:
 
 ```bash
 alembic upgrade head
 python -m app.cli.staging_preflight
-python -m app.cli.bootstrap_staging
 ```
 
-A migration inicial cria o schema completo atual e o catálogo dos módulos:
+Não existe mais bootstrap automático por ENV.
+
+## Dados de cliente ficam no PostgreSQL
+
+Persistidos no banco:
+
+- organizações/agropecuárias;
+- unidades/fazendas;
+- usuários;
+- vínculos e papéis;
+- módulos contratados;
+- permissões;
+- produtos, fórmulas e estoques;
+- eventos e auditoria;
+- identidades de WhatsApp/Telegram;
+- contas de canal por organização.
+
+Isso permite cadastrar centenas ou milhares de clientes sem alterar o Render.
+
+## Módulos
+
+O catálogo contém:
 
 - `livestock` — Pecuária;
 - `feed_mill` — Fábrica de Ração;
 - `finance` — Financeiro.
 
-Criar o catálogo NÃO habilita um módulo para cliente algum. Habilitação continua em `organization_modules`.
+O catálogo existir não habilita módulo para cliente algum. Cada organização possui sua combinação em `organization_modules`.
 
 ## Storage de mídia
 
-Em homologação:
+Homologação usa:
 
 ```text
 CAMPOEDADOS_MEDIA_STORAGE=supabase
 CAMPOEDADOS_SUPABASE_STORAGE_BUCKET=campoedados-staging-media
 ```
 
-O bucket deve ser criado como **privado** no projeto Supabase de homologação.
+O bucket é privado. Arquivos são content-addressed por SHA-256 e o banco guarda somente a referência persistente.
 
-Os arquivos são gravados por SHA-256:
+`SUPABASE_SERVICE_ROLE_KEY` é segredo exclusivamente server-side.
 
-```text
-sha256/ab/cd/<hash>.pdf
-```
+## Segurança do schema Supabase
 
-O banco guarda uma referência do tipo:
+A migration 0002:
 
-```text
-supabase://campoedados-staging-media/sha256/ab/cd/<hash>.pdf
-```
+- habilita RLS nas tabelas do produto;
+- revoga acesso de `anon` e `authenticated` quando esses papéis existem;
+- não cria políticas públicas por padrão.
 
-A chave `SUPABASE_SERVICE_ROLE_KEY` é exclusivamente server-side e nunca deve ir para navegador, mensagem ou repositório.
+A API do Campo e Dados usa conexão server-side direta ao PostgreSQL. Se futuramente alguma tabela precisar ser exposta via Data API, ela deverá receber uma política específica em migration própria.
 
-## Readiness
+## Contas de canal
 
-- `/health`: liveness; informa que o processo HTTP está vivo.
-- `/ready`: readiness; verifica banco e configuração obrigatória do storage.
+### WhatsApp oficial
 
-O Blueprint Render usa `/ready` como health check. Se o banco estiver indisponível ou o storage obrigatório estiver mal configurado, a API responde `503` e a nova instância não deve receber tráfego.
+O modelo atual prevê um número oficial do Campo & Dados. As credenciais globais da Meta são segredo de infraestrutura e podem ser adicionadas ao Render quando o canal for ativado.
 
-## Bootstrap inicial
+Usuários e telefones vinculados continuam no banco.
 
-O bootstrap é idempotente e só roda quando:
+### Telegram por cliente
 
-```text
-CAMPOEDADOS_BOOTSTRAP_ENABLED=true
-```
+Tokens de bots não ficam mais em `CAMPOEDADOS_TELEGRAM_BOTS_JSON` nem em uma ENV por cliente.
 
-Campos obrigatórios:
+Cada bot fica em `channel_accounts`:
 
 ```text
-CAMPOEDADOS_BOOTSTRAP_ORG_NAME
-CAMPOEDADOS_BOOTSTRAP_ORG_SLUG
-CAMPOEDADOS_BOOTSTRAP_ADMIN_NAME
-CAMPOEDADOS_BOOTSTRAP_ADMIN_EMAIL
-CAMPOEDADOS_BOOTSTRAP_ADMIN_TOKEN
-CAMPOEDADOS_BOOTSTRAP_UNITS_JSON
-CAMPOEDADOS_BOOTSTRAP_MODULES
+organização
+canal = telegram
+account_key
+nome
+id externo
+credencial criptografada
+segredo de webhook criptografado
+status
 ```
 
-Exemplo de duas unidades:
-
-```json
-[
-  {"code":"SH7","name":"SH7"},
-  {"code":"NSG","name":"NSG"}
-]
-```
-
-Exemplos válidos de contratação:
-
-```text
-feed_mill
-finance
-livestock
-feed_mill,finance
-livestock,feed_mill
-livestock,finance
-livestock,feed_mill,finance
-```
-
-O script também cria o primeiro administrador com permissão total SOMENTE nos módulos habilitados.
-
-Opcionalmente, pode criar identidade de canal já no bootstrap usando `CAMPOEDADOS_BOOTSTRAP_CHANNEL_IDENTITIES_JSON`. Caso contrário, identidades podem ser cadastradas pela API administrativa depois do primeiro login/token.
+Uma única chave de infraestrutura, `CAMPOEDADOS_CREDENTIAL_ENCRYPTION_KEY`, protege essas credenciais. Essa chave só precisa ser configurada quando contas Telegram reais forem ativadas e nunca deve ser gravada no banco ou no GitHub.
 
 ## Render Blueprint
 
-O `render.yaml` cria/prepara o serviço:
+O Blueprint pede apenas cinco valores secretos na criação inicial:
 
 ```text
-campoedados-staging-api
+DATABASE_URL
+MIGRATION_DATABASE_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+OPENAI_API_KEY
 ```
 
-Configuração principal:
+Demais ajustes de infraestrutura possuem valores no `render.yaml`.
 
-- Python 3.11;
-- plano `starter`;
-- região `oregon`;
-- `preDeployCommand` com migration + preflight + bootstrap;
-- `uvicorn` ouvindo em `$PORT`;
-- health check em `/ready`;
-- secrets como `sync: false`.
+Credenciais opcionais de canais não fazem parte do formulário inicial do Blueprint.
 
-O serviço só deve ser ligado a um projeto Supabase de HOMOLOGAÇÃO. Nunca reutilizar credenciais de produção.
+## Readiness
 
-## Ordem de criação do ambiente
+- `/health`: processo HTTP está vivo.
+- `/ready`: banco e storage obrigatório estão disponíveis.
+
+Se banco ou storage estiverem indisponíveis, `/ready` retorna `503`.
+
+## Primeiro cliente/administrador
+
+A Base 06.1 remove o bootstrap automático. O primeiro cadastro será feito deliberadamente no banco durante a homologação. Depois disso, cadastro de organizações, usuários, unidades, módulos e canais deve ocorrer pela camada administrativa do próprio Campo e Dados.
+
+Esse procedimento evita transformar um mecanismo provisório de deploy em modelo permanente de provisionamento.
+
+## Ordem atual de homologação
 
 1. Criar projeto Supabase exclusivo de homologação.
 2. Criar bucket privado `campoedados-staging-media`.
-3. Obter connection strings no painel Supabase.
-4. Criar o serviço no Render a partir de `render.yaml`.
-5. Preencher secrets e variáveis de bootstrap.
-6. Primeiro deploy executa migration e bootstrap.
-7. Conferir `/health` e `/ready`.
-8. Conferir `GET /v1/me` usando o token administrativo do bootstrap.
-9. Configurar uma identidade de canal.
-10. Conectar primeiro Telegram ou WhatsApp ao webhook público HTTPS.
-11. Enviar uma mensagem real e conferir Evento + auditoria.
+3. Criar serviço Render pelo `render.yaml`.
+4. Informar somente os cinco secrets iniciais.
+5. Deploy executa `alembic upgrade head` + preflight.
+6. Conferir `/health` e `/ready`.
+7. Criar o primeiro cadastro administrativo no PostgreSQL.
+8. Cadastrar organização, unidades e módulos no banco.
+9. Ativar Telegram ou WhatsApp quando desejado.
+10. Enviar a primeira mensagem real e conferir Evento + auditoria.
 
-## Dados de negócio
+## CI
 
-A Base 06 NÃO injeta estoque, fórmulas ou lançamentos fictícios em homologação.
-
-Isso é proposital. O ambiente nasce estruturalmente real, mas os dados de Fábrica de Ração precisam vir do cadastro/importação homologada. Assim não mascaramos problemas com estoque sintético.
-
-O módulo Pecuária existe no catálogo e no controle de acesso, mas os fluxos pecuários do novo núcleo modular ainda precisam ser implementados/homologados antes de serem usados como operação real.
-
-## Validação CI
-
-O GitHub Actions agora sobe PostgreSQL 16 real e executa:
+O GitHub Actions sobe PostgreSQL 16 e valida:
 
 1. instalação do projeto;
-2. `alembic upgrade head`;
-3. conferência das tabelas criadas;
-4. bootstrap duas vezes para provar idempotência;
-5. validação de que apenas os módulos escolhidos ficaram habilitados;
-6. suíte completa `pytest` das Bases 01–06.
+2. migrations até `head`;
+3. existência de `channel_accounts`;
+4. RLS habilitado nas tabelas do produto;
+5. suíte completa das Bases 01–06.1.
