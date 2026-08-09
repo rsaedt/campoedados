@@ -25,8 +25,16 @@ O núcleo concentra:
 - eventos de campo e interpretação;
 - aprovação gerencial;
 - auditoria;
-- identidades de WhatsApp/Telegram;
+- identidades e contas de WhatsApp/Telegram;
 - arquivos originais e entrada multimodal.
+
+## Princípio de configuração
+
+**ENV é para infraestrutura e segredos. Dados de clientes ficam no banco.**
+
+Organizações, unidades, usuários, módulos contratados, permissões e vínculos de canal não são configurados no Render. O PostgreSQL é a fonte de verdade para esses cadastros.
+
+Tokens de bots Telegram por cliente ficam criptografados em `channel_accounts`, protegidos por uma única chave server-side quando esse recurso for ativado.
 
 ## Capacidades atuais
 
@@ -42,7 +50,9 @@ O núcleo concentra:
 - idempotência de mensagens e documentos;
 - PostgreSQL + Alembic para homologação;
 - armazenamento persistente de mídia em Supabase Storage;
-- Blueprint Render e readiness real.
+- Blueprint Render enxuto e readiness real;
+- RLS defensivo nas tabelas do produto;
+- contas Telegram por organização armazenadas no banco com segredo criptografado.
 
 ## Executar localmente
 
@@ -64,10 +74,12 @@ Endpoints principais:
 - `POST /v1/operator/media/invoice`
 - `POST /v1/operator/media/audio`
 - `GET /v1/manager/pending`
+- `POST /v1/admin/channel-identities`
+- `POST /v1/admin/channel-accounts`
 - webhooks em `/v1/channels/webhooks/...`
 
 ## Homologação
 
-A Base 06 está documentada em [`docs/BASE06_STAGING.md`](docs/BASE06_STAGING.md).
+A Base 06/06.1 está documentada em [`docs/BASE06_STAGING.md`](docs/BASE06_STAGING.md).
 
 O módulo Pecuária já faz parte do catálogo modular e do controle de acesso, mas os fluxos pecuários do novo núcleo ainda precisam ser implementados/homologados antes de operação real.

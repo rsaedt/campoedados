@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import hmac
-import json
-import os
 from dataclasses import dataclass
 
 import httpx
 
+from app.core.database import SessionLocal
+from app.services.channel_accounts import ChannelAccountError, load_channel_credentials
 from app.services.channels.base import DownloadedMedia, InboundChannelMessage, InboundMedia
 
 
@@ -21,26 +21,19 @@ class TelegramBotConfig:
 
     @classmethod
     def for_account(cls, account_key: str) -> "TelegramBotConfig":
-        raw = os.getenv("CAMPOEDADOS_TELEGRAM_BOTS_JSON", "").strip()
-        if raw:
-            try:
-                mapping = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                raise TelegramConfigurationError("CAMPOEDADOS_TELEGRAM_BOTS_JSON inválido.") from exc
-            row = mapping.get(account_key)
-            if row:
-                token = str(row.get("token") or "")
-                secret = str(row.get("secret_token") or "")
-                if token and secret:
-                    return cls(token=token, secret_token=secret)
-
-        if account_key == "default":
-            token = os.getenv("CAMPOEDADOS_TELEGRAM_BOT_TOKEN", "")
-            secret = os.getenv("CAMPOEDADOS_TELEGRAM_SECRET_TOKEN", "")
-            if token and secret:
-                return cls(token=token, secret_token=secret)
-
-        raise TelegramConfigurationError(f"Bot Telegram '{account_key}' não configurado.")
+        try:
+            with SessionLocal() as session:
+                _, credentials = load_channel_credentials(
+                    session,
+                    channel="telegram",
+                    account_key=account_key,
+                )
+                return cls(
+                    token=credentials.credential,
+                    secret_token=credentials.webhook_secret,
+                )
+        except ChannelAccountError as exc:
+            raise TelegramConfigurationError(str(exc)) from exc
 
 
 class TelegramTransport:

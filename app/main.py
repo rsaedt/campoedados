@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI, Response, status
 
+from app.api.admin_channel_accounts import router as admin_channel_accounts_router
 from app.api.admin_channels import router as admin_channels_router
 from app.api.channels import router as channels_router
 from app.api.manager import router as manager_router
@@ -11,19 +12,20 @@ from app.api.operator import router as operator_router
 from app.core.database import database_is_ready
 from app.services.media_storage import media_storage_backend, media_storage_is_configured
 
-app = FastAPI(title="Campo e Dados", version="0.6.0")
+app = FastAPI(title="Campo e Dados", version="0.6.1")
 app.include_router(me_router)
 app.include_router(operator_router)
 app.include_router(media_router)
 app.include_router(manager_router)
 app.include_router(admin_channels_router)
+app.include_router(admin_channel_accounts_router)
 app.include_router(channels_router)
 
 
 @app.get("/health")
 def health():
     """Liveness: confirma apenas que o processo HTTP está vivo."""
-    return {"status": "ok", "service": "campoedados", "version": "0.6.0"}
+    return {"status": "ok", "service": "campoedados", "version": "0.6.1"}
 
 
 @app.get("/ready")
@@ -38,7 +40,7 @@ def ready(response: Response):
     return {
         "status": "ready" if is_ready else "not_ready",
         "service": "campoedados",
-        "version": "0.6.0",
+        "version": "0.6.1",
         "environment": os.getenv("CAMPOEDADOS_ENV", "development"),
         "database": "ready" if db_ready else "unavailable",
         "media_storage": {
@@ -56,4 +58,5 @@ def ready(response: Response):
         "audio_transcription": True,
         "channel_webhooks": ["whatsapp", "telegram"],
         "channel_identity_mapping": True,
+        "channel_accounts_in_database": True,
     }

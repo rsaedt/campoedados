@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: python -m pip install -e .
-    preDeployCommand: alembic upgrade head && python -m app.cli.staging_preflight && python -m app.cli.bootstrap_staging
+    preDeployCommand: alembic upgrade head && python -m app.cli.staging_preflight
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /ready
     maxShutdownDelaySeconds: 30
@@ -44,37 +44,3 @@ services:
         value: gpt-5-mini
       - key: CAMPOEDADOS_OPENAI_TRANSCRIBE_MODEL
         value: gpt-4o-mini-transcribe
-      - key: CAMPOEDADOS_BOOTSTRAP_ENABLED
-        value: "true"
-      - key: CAMPOEDADOS_BOOTSTRAP_ORG_NAME
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_ORG_SLUG
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_ADMIN_NAME
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_ADMIN_EMAIL
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_ADMIN_TOKEN
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_UNITS_JSON
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_MODULES
-        sync: false
-      - key: CAMPOEDADOS_BOOTSTRAP_CHANNEL_IDENTITIES_JSON
-        value: "[]"
-      - key: CAMPOEDADOS_WHATSAPP_ACCESS_TOKEN
-        sync: false
-      - key: CAMPOEDADOS_WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-      - key: CAMPOEDADOS_WHATSAPP_APP_SECRET
-        sync: false
-      - key: CAMPOEDADOS_WHATSAPP_VERIFY_TOKEN
-        sync: false
-      - key: CAMPOEDADOS_WHATSAPP_GRAPH_VERSION
-        sync: false
-      - key: CAMPOEDADOS_TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: CAMPOEDADOS_TELEGRAM_SECRET_TOKEN
-        sync: false
-      - key: CAMPOEDADOS_TELEGRAM_BOTS_JSON
-        sync: false

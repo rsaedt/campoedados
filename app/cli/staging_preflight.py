@@ -17,31 +17,23 @@ def main() -> int:
 
     if environment == "staging" and DATABASE_URL.startswith("sqlite"):
         failures.append("staging não pode usar SQLite em DATABASE_URL")
-    if not database_is_ready():
+    db_ready = database_is_ready()
+    if not db_ready:
         failures.append("banco de dados indisponível")
 
     storage_backend = media_storage_backend()
     if environment == "staging" and storage_backend != "supabase":
         failures.append("staging deve usar CAMPOEDADOS_MEDIA_STORAGE=supabase")
-    if not media_storage_is_configured():
+    storage_ready = media_storage_is_configured()
+    if not storage_ready:
         failures.append("storage de mídia não está configurado")
 
     print(f"environment={environment}")
-    print(f"database={'ok' if database_is_ready() else 'fail'}")
+    print(f"database={'ok' if db_ready else 'fail'}")
     print(f"media_storage={storage_backend}")
     print(f"openai={'configured' if _flag('OPENAI_API_KEY') else 'not_configured'}")
-    print(
-        "whatsapp="
-        + ("configured" if _flag("CAMPOEDADOS_WHATSAPP_ACCESS_TOKEN") else "not_configured")
-    )
-    print(
-        "telegram="
-        + (
-            "configured"
-            if _flag("CAMPOEDADOS_TELEGRAM_BOT_TOKEN") or _flag("CAMPOEDADOS_TELEGRAM_BOTS_JSON")
-            else "not_configured"
-        )
-    )
+    print("tenant_data=database")
+    print("channel_accounts=database")
 
     if failures:
         for failure in failures:
