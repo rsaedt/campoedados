@@ -40,6 +40,11 @@ Administradores autenticados configuram vínculos por:
 - `POST /v1/admin/channel-identities`
 - `GET /v1/admin/channel-identities`
 
+A partir da Base 06.1, as contas Telegram por cliente também possuem cadastro próprio:
+
+- `POST /v1/admin/channel-accounts`
+- `GET /v1/admin/channel-accounts`
+
 Usuários não cadastrados recebem resposta controlada e nenhuma operação é criada.
 
 ## WhatsApp
@@ -57,7 +62,9 @@ Proteções:
 - mídia é baixada pela Cloud API usando o `media id`;
 - conteúdo segue para a Base 04 e recebe SHA-256 local.
 
-O `CAMPOEDADOS_WHATSAPP_GRAPH_VERSION` é obrigatório e não possui valor fixo no código para evitar envelhecimento silencioso da integração.
+O número oficial do Campo & Dados é tratado como infraestrutura global. Usuários, telefones e unidades vinculadas continuam no PostgreSQL.
+
+O `CAMPOEDADOS_WHATSAPP_GRAPH_VERSION` é obrigatório somente quando o canal WhatsApp for ativado e não possui valor fixo no código para evitar envelhecimento silencioso da integração.
 
 ## Telegram
 
@@ -72,7 +79,9 @@ Proteções:
 - mídia é resolvida com `getFile` e depois baixada;
 - a resposta usa `sendMessage`.
 
-É possível configurar um bot simples (`default`) ou múltiplos bots via `CAMPOEDADOS_TELEGRAM_BOTS_JSON`.
+A Base 06.1 substitui configuração de bots por ENV/JSON pela tabela `channel_accounts`. Cada bot pertence a uma organização e armazena token + segredo de webhook criptografados. Uma única chave server-side (`CAMPOEDADOS_CREDENTIAL_ENCRYPTION_KEY`) protege essas credenciais.
+
+Assim, adicionar um novo cliente/bot não exige alteração no Render.
 
 ## Fluxos
 
@@ -112,4 +121,5 @@ Os testes cobrem:
 - Telegram áudio;
 - segredo Telegram inválido;
 - assinatura HMAC real do WhatsApp;
-- cadastro administrativo de identidade de canal.
+- cadastro administrativo de identidade de canal;
+- credenciais Telegram criptografadas no banco (Base 06.1).
