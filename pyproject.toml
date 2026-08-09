@@ -1,6 +1,6 @@
 [project]
 name = "campoedados"
-version = "0.7.2"
+version = "0.7.3"
 description = "Núcleo modular do Campo e Dados"
 requires-python = ">=3.11"
 dependencies = [
