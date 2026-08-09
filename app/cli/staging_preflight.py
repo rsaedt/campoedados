@@ -4,6 +4,7 @@ import os
 import sys
 
 from app.core.database import DATABASE_URL, database_is_ready
+from app.services.channel_accounts import ChannelCredentialConfigurationError, CredentialCipher
 from app.services.media_storage import media_storage_backend, media_storage_is_configured
 
 
@@ -28,10 +29,19 @@ def main() -> int:
     if not storage_ready:
         failures.append("storage de mídia não está configurado")
 
+    channel_crypto_ready = True
+    if environment == "staging":
+        try:
+            CredentialCipher.from_env()
+        except ChannelCredentialConfigurationError as exc:
+            channel_crypto_ready = False
+            failures.append(str(exc))
+
     print(f"environment={environment}")
     print(f"database={'ok' if db_ready else 'fail'}")
     print(f"media_storage={storage_backend}")
     print(f"openai={'configured' if _flag('OPENAI_API_KEY') else 'not_configured'}")
+    print(f"channel_credential_encryption={'ok' if channel_crypto_ready else 'fail'}")
     print("tenant_data=database")
     print("channel_accounts=database")
 
