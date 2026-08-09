@@ -10,16 +10,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_principal
 from app.core.database import get_db
 from app.core.enums import EventStatus, ModuleCode, MovementType
-from app.models.channel import ChannelAccount, ChannelContactRequest, ChannelIdentity
+from app.models.channel import ChannelAccount, ChannelContactRequest
 from app.models.domain import (
     Event,
+    EventModuleTarget,
     InventoryBalance,
     Membership,
-    OrganizationModule,
     Product,
     ProductionBatch,
     Recipe,
-    SystemModule,
     Unit,
     User,
 )
@@ -29,6 +28,7 @@ from app.services.channel_contacts import ChannelContactRequestError, link_conta
 from app.services.channel_identity import ChannelIdentityAdminError, require_channel_admin
 from app.services.inventory import receive_stock
 from app.services.manager import list_pending_events
+from app.services.module_access import accessible_modules
 from app.services.permissions import PermissionDeniedError, require_module_permission
 from app.services.telegram_admin import TelegramAdminError, connect_telegram_bot
 
@@ -65,6 +65,9 @@ def dashboard_overview(
     session: Session = Depends(get_db),
 ):
     organization_id = principal.organization_id
+    modules = accessible_modules(session, principal)
+    visible_codes = {module.code for module in modules}
+    feed_mill_visible = ModuleCode.FEED_MILL.value in visible_codes
 
     units = list(
         session.scalars(
@@ -78,50 +81,69 @@ def dashboard_overview(
     memberships = session.execute(
         select(Membership, User)
         .join(User, User.id == Membership.user_id)
-        .where(Membership.organization_id == organization_id, Membership.active.is_(True), User.active.is_(True))
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.active.is_(True),
+            User.active.is_(True),
+        )
         .order_by(User.display_name)
     ).all()
 
-    modules = session.execute(
-        select(OrganizationModule, SystemModule)
-        .join(SystemModule, SystemModule.code == OrganizationModule.module_code)
-        .where(OrganizationModule.organization_id == organization_id, OrganizationModule.enabled.is_(True))
-        .order_by(SystemModule.name)
-    ).all()
-
-    products = list(
-        session.scalars(
-            select(Product)
-            .where(Product.organization_id == organization_id, Product.active.is_(True))
-            .order_by(Product.name)
+    products = (
+        list(
+            session.scalars(
+                select(Product)
+                .where(Product.organization_id == organization_id, Product.active.is_(True))
+                .order_by(Product.name)
+            )
         )
+        if feed_mill_visible
+        else []
     )
     product_by_id = {row.id: row for row in products}
 
-    balances = list(
-        session.scalars(
-            select(InventoryBalance).where(InventoryBalance.organization_id == organization_id)
+    balances = (
+        list(
+            session.scalars(
+                select(InventoryBalance).where(InventoryBalance.organization_id == organization_id)
+            )
         )
+        if feed_mill_visible
+        else []
     )
 
-    events = list(
-        session.scalars(
-            select(Event)
-            .where(Event.organization_id == organization_id)
-            .order_by(Event.received_at.desc())
-            .limit(50)
+    if visible_codes:
+        visible_event_ids = select(EventModuleTarget.event_id).where(
+            EventModuleTarget.module_code.in_(visible_codes)
         )
-    )
+        events = list(
+            session.scalars(
+                select(Event)
+                .where(
+                    Event.organization_id == organization_id,
+                    Event.id.in_(visible_event_ids),
+                )
+                .order_by(Event.received_at.desc())
+                .limit(50)
+            )
+        )
+    else:
+        visible_event_ids = None
+        events = []
 
     pending = list_pending_events(session, principal=principal)
 
-    productions = session.execute(
-        select(ProductionBatch, Recipe)
-        .join(Recipe, Recipe.id == ProductionBatch.recipe_id)
-        .where(ProductionBatch.organization_id == organization_id)
-        .order_by(ProductionBatch.created_at.desc())
-        .limit(20)
-    ).all()
+    productions = (
+        session.execute(
+            select(ProductionBatch, Recipe)
+            .join(Recipe, Recipe.id == ProductionBatch.recipe_id)
+            .where(ProductionBatch.organization_id == organization_id)
+            .order_by(ProductionBatch.created_at.desc())
+            .limit(20)
+        ).all()
+        if feed_mill_visible
+        else []
+    )
 
     accounts = []
     contact_requests = []
@@ -147,15 +169,27 @@ def dashboard_overview(
     except ChannelIdentityAdminError:
         pass
 
-    event_total = session.scalar(
-        select(func.count()).select_from(Event).where(Event.organization_id == organization_id)
-    ) or 0
-    processed_total = session.scalar(
-        select(func.count()).select_from(Event).where(
-            Event.organization_id == organization_id,
-            Event.status == EventStatus.PROCESSED.value,
-        )
-    ) or 0
+    if visible_event_ids is not None:
+        event_total = session.scalar(
+            select(func.count())
+            .select_from(Event)
+            .where(
+                Event.organization_id == organization_id,
+                Event.id.in_(visible_event_ids),
+            )
+        ) or 0
+        processed_total = session.scalar(
+            select(func.count())
+            .select_from(Event)
+            .where(
+                Event.organization_id == organization_id,
+                Event.id.in_(visible_event_ids),
+                Event.status == EventStatus.PROCESSED.value,
+            )
+        ) or 0
+    else:
+        event_total = 0
+        processed_total = 0
 
     return {
         "me": {
@@ -174,8 +208,15 @@ def dashboard_overview(
             "products": len(products),
         },
         "modules": [
-            {"code": org_module.module_code, "name": system_module.name}
-            for org_module, system_module in modules
+            {
+                "code": module.code,
+                "name": module.name,
+                "can_view": module.can_view,
+                "can_register": module.can_register,
+                "can_approve": module.can_approve,
+                "can_configure": module.can_configure,
+            }
+            for module in modules
         ],
         "units": [{"id": row.id, "code": row.code, "name": row.name} for row in units],
         "memberships": [
@@ -249,7 +290,8 @@ def dashboard_overview(
                 "active": row.active,
                 "credential_configured": bool(row.credential_ciphertext and row.webhook_secret_ciphertext),
             }
-            for row in accounts if row.channel == "telegram"
+            for row in accounts
+            if row.channel == "telegram"
         ],
         "pending_contacts": [
             {
