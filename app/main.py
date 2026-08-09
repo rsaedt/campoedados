@@ -7,6 +7,7 @@ from app.api.admin_channel_accounts import router as admin_channel_accounts_rout
 from app.api.admin_channels import router as admin_channels_router
 from app.api.channels import router as channels_router
 from app.api.dashboard import router as dashboard_router
+from app.api.dashboard_channel_links import router as dashboard_channel_links_router
 from app.api.dashboard_ui import router as dashboard_ui_router
 from app.api.manager import router as manager_router
 from app.api.media import router as media_router
@@ -16,10 +17,11 @@ from app.api.web_auth import router as web_auth_router
 from app.core.database import database_is_ready
 from app.services.media_storage import media_storage_backend, media_storage_is_configured
 
-app = FastAPI(title="Campo e Dados", version="0.7.2")
+app = FastAPI(title="Campo e Dados", version="0.7.3")
 app.include_router(dashboard_ui_router)
 app.include_router(web_auth_router)
 app.include_router(dashboard_router)
+app.include_router(dashboard_channel_links_router)
 app.include_router(me_router)
 app.include_router(operator_router)
 app.include_router(media_router)
@@ -37,7 +39,7 @@ def root():
 @app.get("/health")
 def health():
     """Liveness: confirma apenas que o processo HTTP está vivo."""
-    return {"status": "ok", "service": "campoedados", "version": "0.7.2"}
+    return {"status": "ok", "service": "campoedados", "version": "0.7.3"}
 
 
 @app.get("/ready")
@@ -52,7 +54,7 @@ def ready(response: Response):
     return {
         "status": "ready" if is_ready else "not_ready",
         "service": "campoedados",
-        "version": "0.7.2",
+        "version": "0.7.3",
         "environment": os.getenv("CAMPOEDADOS_ENV", "development"),
         "database": "ready" if db_ready else "unavailable",
         "media_storage": {
@@ -69,6 +71,7 @@ def ready(response: Response):
         "dashboard_inventory_adjustment": True,
         "telegram_dashboard_connect": True,
         "telegram_contact_linking": True,
+        "telegram_contact_relinking": True,
         "channel_credential_encryption": True,
         "transfer_flow": True,
         "invoice_receipt_flow": True,
