@@ -104,8 +104,10 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     body = response.json()
     assert body["status"] == "ready"
     assert body["environment"] == "staging"
-    assert body["version"] == "0.7.0"
+    assert body["version"] == "0.7.1"
     assert body["dashboard"] is True
+    assert body["web_user_login"] is True
+    assert body["web_session_cookie"] is True
     assert body["telegram_dashboard_connect"] is True
     assert body["telegram_contact_linking"] is True
     assert body["channel_accounts_in_database"] is True
