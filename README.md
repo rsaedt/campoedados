@@ -24,27 +24,50 @@ O núcleo concentra:
 - habilitação independente de módulos;
 - eventos de campo e interpretação;
 - aprovação gerencial;
-- auditoria.
+- auditoria;
+- identidades de WhatsApp/Telegram;
+- arquivos originais e entrada multimodal.
 
-## Regras implementadas nesta base
+## Capacidades atuais
 
-1. Uma organização pode habilitar qualquer combinação de módulos.
-2. Produção de ração baixa ingredientes e calcula custo bruto aproximado pela soma dos custos dos produtos consumidos.
-3. O produto fabricado entra no estoque com custo unitário calculado.
-4. Transferência entre unidades leva quantidade **e valor**, sem criar compra, venda, receita ou despesa.
-5. O contas a pagar pertence à **organização/Agropecuária**, podendo ser alocado a centros de custo/unidades.
+- Agente Operador por API, WhatsApp ou Telegram;
+- texto, áudio, foto e PDF;
+- leitura estruturada de NF e transcrição de áudio;
+- produção de ração com baixa de ingredientes e custo bruto aproximado;
+- estoque valorizado por unidade;
+- transferência entre fazendas carregando quantidade e valor;
+- não conformidades e Agente Gerencial;
+- compra e contas a pagar na organização/Agropecuária;
+- contratação independente dos módulos;
+- idempotência de mensagens e documentos;
+- PostgreSQL + Alembic para homologação;
+- armazenamento persistente de mídia em Supabase Storage;
+- Blueprint Render e readiness real.
 
-## Executar
+## Executar localmente
 
 ```bash
 python -m pip install -e '.[dev]'
+alembic upgrade head
 pytest
 uvicorn app.main:app --reload
 ```
 
-Endpoints iniciais:
+Por padrão, desenvolvimento local pode usar SQLite e filesystem. Homologação usa PostgreSQL/Supabase e storage privado.
+
+Endpoints principais:
 
 - `GET /health`
 - `GET /ready`
+- `GET /v1/me`
+- `POST /v1/operator/messages`
+- `POST /v1/operator/media/invoice`
+- `POST /v1/operator/media/audio`
+- `GET /v1/manager/pending`
+- webhooks em `/v1/channels/webhooks/...`
 
-Esta primeira base deliberadamente não expõe endpoints de escrita sem autenticação. A API operacional será adicionada junto com autenticação/autorização.
+## Homologação
+
+A Base 06 está documentada em [`docs/BASE06_STAGING.md`](docs/BASE06_STAGING.md).
+
+O módulo Pecuária já faz parte do catálogo modular e do controle de acesso, mas os fluxos pecuários do novo núcleo ainda precisam ser implementados/homologados antes de operação real.
