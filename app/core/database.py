@@ -1,3 +1,5 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -13,3 +15,13 @@ def build_engine(url: str = "sqlite:///./campoedados.db"):
 
 def build_session_factory(engine):
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./campoedados.db")
+engine = build_engine(DATABASE_URL)
+SessionLocal = build_session_factory(engine)
+
+
+def get_db():
+    with SessionLocal() as session:
+        yield session
