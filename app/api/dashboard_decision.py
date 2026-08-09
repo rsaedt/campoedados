@@ -8,9 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_principal
 from app.core.database import get_db
-from app.core.enums import EventStatus, ProductType
-from app.models.domain import AuditEntry, Event, InventoryBalance, Product, ProductionBatch, Unit
+from app.core.enums import EventStatus, ModuleCode, ProductType
+from app.models.domain import (
+    AuditEntry,
+    Event,
+    EventModuleTarget,
+    InventoryBalance,
+    Product,
+    ProductionBatch,
+    Unit,
+)
 from app.services.auth import Principal
+from app.services.module_access import accessible_module_codes
 
 
 router = APIRouter(prefix="/v1/dashboard", tags=["dashboard-decision"])
@@ -42,6 +51,8 @@ def decision_overview(
     session: Session = Depends(get_db),
 ):
     organization_id = principal.organization_id
+    visible_codes = accessible_module_codes(session, principal)
+    feed_mill_visible = ModuleCode.FEED_MILL.value in visible_codes
 
     units = list(
         session.scalars(
@@ -50,31 +61,55 @@ def decision_overview(
             .order_by(Unit.code)
         )
     )
-    products = list(
-        session.scalars(
-            select(Product)
-            .where(Product.organization_id == organization_id, Product.active.is_(True))
-            .order_by(Product.name)
+
+    products = (
+        list(
+            session.scalars(
+                select(Product)
+                .where(Product.organization_id == organization_id, Product.active.is_(True))
+                .order_by(Product.name)
+            )
         )
+        if feed_mill_visible
+        else []
     )
-    balances = list(
-        session.scalars(
-            select(InventoryBalance).where(InventoryBalance.organization_id == organization_id)
+    balances = (
+        list(
+            session.scalars(
+                select(InventoryBalance).where(InventoryBalance.organization_id == organization_id)
+            )
         )
+        if feed_mill_visible
+        else []
     )
-    events = list(
-        session.scalars(
-            select(Event)
-            .where(Event.organization_id == organization_id)
-            .order_by(Event.received_at.desc())
+
+    if visible_codes:
+        visible_event_ids = select(EventModuleTarget.event_id).where(
+            EventModuleTarget.module_code.in_(visible_codes)
         )
-    )
-    productions = list(
-        session.scalars(
-            select(ProductionBatch)
-            .where(ProductionBatch.organization_id == organization_id)
-            .order_by(ProductionBatch.created_at.desc())
+        events = list(
+            session.scalars(
+                select(Event)
+                .where(
+                    Event.organization_id == organization_id,
+                    Event.id.in_(visible_event_ids),
+                )
+                .order_by(Event.received_at.desc())
+            )
         )
+    else:
+        events = []
+
+    productions = (
+        list(
+            session.scalars(
+                select(ProductionBatch)
+                .where(ProductionBatch.organization_id == organization_id)
+                .order_by(ProductionBatch.created_at.desc())
+            )
+        )
+        if feed_mill_visible
+        else []
     )
 
     product_by_id = {row.id: row for row in products}
@@ -185,12 +220,17 @@ def decision_overview(
         "summary": {
             "inventory_value": _num(inventory_value),
             "waiting_complement": len(waiting_complement),
-            "production_count": session.scalar(
-                select(func.count())
-                .select_from(ProductionBatch)
-                .where(ProductionBatch.organization_id == organization_id)
-            )
-            or 0,
+            "production_count": (
+                session.scalar(
+                    select(func.count())
+                    .select_from(ProductionBatch)
+                    .where(ProductionBatch.organization_id == organization_id)
+                )
+                or 0
+                if feed_mill_visible
+                else 0
+            ),
+            "feed_mill_visible": feed_mill_visible,
         },
         "unit_summaries": unit_summaries,
         "attention_items": attention_items,
