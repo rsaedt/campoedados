@@ -52,5 +52,31 @@ jobs:
           assert not missing, f"Tabelas ausentes após migration: {sorted(missing)}"
           print(f"migration ok: {len(tables)} tables")
           PY
+      - name: Staging bootstrap is idempotent and modular
+        env:
+          DATABASE_URL: postgresql://campoedados:campoedados@localhost:5432/campoedados_test
+          CAMPOEDADOS_BOOTSTRAP_ENABLED: "true"
+          CAMPOEDADOS_BOOTSTRAP_ORG_NAME: Agropecuária Homologação
+          CAMPOEDADOS_BOOTSTRAP_ORG_SLUG: agro-staging
+          CAMPOEDADOS_BOOTSTRAP_ADMIN_NAME: Admin Staging
+          CAMPOEDADOS_BOOTSTRAP_ADMIN_EMAIL: admin@staging.test
+          CAMPOEDADOS_BOOTSTRAP_ADMIN_TOKEN: staging-token-test-only
+          CAMPOEDADOS_BOOTSTRAP_UNITS_JSON: '[{"code":"SH7","name":"SH7"},{"code":"NSG","name":"NSG"}]'
+          CAMPOEDADOS_BOOTSTRAP_MODULES: feed_mill,finance
+          CAMPOEDADOS_BOOTSTRAP_CHANNEL_IDENTITIES_JSON: '[]'
+        run: |
+          python -m app.cli.bootstrap_staging
+          python -m app.cli.bootstrap_staging
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          engine = create_engine("postgresql+psycopg://campoedados:campoedados@localhost:5432/campoedados_test")
+          with engine.connect() as con:
+              assert con.execute(text("select count(*) from organizations where slug='agro-staging'")).scalar_one() == 1
+              assert con.execute(text("select count(*) from units")).scalar_one() == 2
+              assert con.execute(text("select count(*) from access_tokens")).scalar_one() == 1
+              enabled = set(con.execute(text("select module_code from organization_modules where enabled=true")).scalars())
+              assert enabled == {"feed_mill", "finance"}
+          print("bootstrap ok")
+          PY
       - name: Test
         run: python -m pytest
