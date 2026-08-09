@@ -24,6 +24,7 @@ def create_purchase_with_payables(
     destination_unit_id: str | None = None,
     event_id: str | None = None,
     allocations: list[tuple[str, Decimal]] | None = None,
+    issue_date: date | None = None,
 ) -> Purchase:
     require_module(session, organization_id, ModuleCode.FINANCE.value)
     total = q_money(d(total_amount))
@@ -43,6 +44,7 @@ def create_purchase_with_payables(
         destination_unit_id=destination_unit_id,
         event_id=event_id,
         invoice_number=invoice_number,
+        issue_date=issue_date,
         total_amount=total,
         status=PurchaseStatus.WAITING_APPROVAL.value,
     )
@@ -87,5 +89,22 @@ def approve_purchase(session: Session, *, organization_id: str, purchase_id: str
     for payable in payables:
         if payable.status == PayableStatus.PENDING_APPROVAL.value:
             payable.status = PayableStatus.OPEN.value
+    session.flush()
+    return purchase
+
+
+def reject_purchase(session: Session, *, organization_id: str, purchase_id: str) -> Purchase:
+    require_module(session, organization_id, ModuleCode.FINANCE.value)
+    purchase = session.get(Purchase, purchase_id)
+    if purchase is None or purchase.organization_id != organization_id:
+        raise ValueError("Compra não encontrada para a organização.")
+    if purchase.status != PurchaseStatus.WAITING_APPROVAL.value:
+        raise ValueError("Somente compras aguardando aprovação podem ser rejeitadas.")
+
+    purchase.status = PurchaseStatus.REJECTED.value
+    payables = session.query(AccountsPayable).filter(AccountsPayable.purchase_id == purchase.id).all()
+    for payable in payables:
+        if payable.status == PayableStatus.PENDING_APPROVAL.value:
+            payable.status = PayableStatus.CANCELLED.value
     session.flush()
     return purchase
