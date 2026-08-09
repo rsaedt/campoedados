@@ -1,4 +1,4 @@
-# Base 06 / 06.1 — Ambiente real de homologação
+# Base 06 / 06.1 / 06.2 / 06.3 — Ambiente real de homologação
 
 ## Objetivo
 
@@ -21,12 +21,10 @@ Render — campoedados-staging-api
 
 ## Princípio de configuração
 
-A Base 06.1 corrige a primeira versão da homologação:
-
 > Variável de ambiente = segredo/configuração da infraestrutura.  
 > Banco de dados = cliente, usuário, unidade, módulo, permissão e configuração operacional.
 
-Portanto, organização, administrador, unidades, módulos contratados e identidades de canal **não são mais variáveis do Render**.
+Portanto, organização, administrador, unidades, módulos contratados e identidades de canal **não são variáveis do Render**.
 
 ## Banco
 
@@ -34,6 +32,7 @@ Portanto, organização, administrador, unidades, módulos contratados e identid
 - `MIGRATION_DATABASE_URL`: conexão usada exclusivamente pelo Alembic.
 - URLs `postgres://` e `postgresql://` são normalizadas para `postgresql+psycopg://`.
 - Porta `6543` é reconhecida como transaction pooler e usa `NullPool` automaticamente.
+- Na homologação atual, o Session/Shared pooler na porta `5432` pode ser usado nas duas URLs.
 
 Cada deploy executa somente:
 
@@ -42,7 +41,7 @@ alembic upgrade head
 python -m app.cli.staging_preflight
 ```
 
-Não existe mais bootstrap automático por ENV.
+Não existe bootstrap automático por ENV.
 
 ## Dados de cliente ficam no PostgreSQL
 
@@ -78,11 +77,13 @@ Homologação usa:
 ```text
 CAMPOEDADOS_MEDIA_STORAGE=supabase
 CAMPOEDADOS_SUPABASE_STORAGE_BUCKET=campoedados-staging-media
+SUPABASE_URL=...
+SUPABASE_SECRET_KEY=sb_secret_...
 ```
 
 O bucket é privado. Arquivos são content-addressed por SHA-256 e o banco guarda somente a referência persistente.
 
-`SUPABASE_SERVICE_ROLE_KEY` é segredo exclusivamente server-side.
+`SUPABASE_SECRET_KEY` é segredo exclusivamente server-side. O código mantém compatibilidade temporária com a antiga `SUPABASE_SERVICE_ROLE_KEY`, mas o Blueprint novo não a solicita.
 
 ## Segurança do schema Supabase
 
@@ -92,7 +93,45 @@ A migration 0002:
 - revoga acesso de `anon` e `authenticated` quando esses papéis existem;
 - não cria políticas públicas por padrão.
 
-A API do Campo e Dados usa conexão server-side direta ao PostgreSQL. Se futuramente alguma tabela precisar ser exposta via Data API, ela deverá receber uma política específica em migration própria.
+A migration 0003:
+
+- habilita RLS também em `alembic_version`;
+- revoga `anon` e `authenticated` nessa tabela interna;
+- remove o segundo índice único redundante de `access_tokens.token_hash`.
+
+RLS sem políticas nas tabelas do produto é intencional neste estágio: a aplicação acessa o PostgreSQL server-side e as tabelas não devem ficar abertas pela Data API. Se uma tabela precisar ser exposta futuramente, receberá grants e políticas específicas em migration própria.
+
+## Primeiro cliente — onboarding controlado
+
+A Base 06.3 adiciona um comando administrativo manual. Ele **não roda no deploy** e não usa ENV para dados de cliente.
+
+Exemplo:
+
+```bash
+python -m app.cli.onboard_organization \
+  --org-name "Agro Homologação" \
+  --org-slug agro-homolog \
+  --admin-name "Administrador" \
+  --unit "SH7=Fazenda SH7" \
+  --unit "NSG=Fazenda NSG" \
+  --module livestock \
+  --module feed_mill \
+  --module finance
+```
+
+O comando cria em uma única transação:
+
+1. organização;
+2. administrador e membership;
+3. unidades;
+4. combinação de módulos contratados;
+5. permissões administrativas somente nos módulos habilitados;
+6. entrada de auditoria;
+7. token administrativo.
+
+O token bruto é exibido **uma única vez** no terminal. O banco armazena somente SHA-256. O comando recusa um slug já existente para não transformar uma reexecução em alteração silenciosa de cliente.
+
+`--admin-email` é opcional. Pode ser informado quando desejado.
 
 ## Contas de canal
 
@@ -104,22 +143,9 @@ Usuários e telefones vinculados continuam no banco.
 
 ### Telegram por cliente
 
-Tokens de bots não ficam mais em `CAMPOEDADOS_TELEGRAM_BOTS_JSON` nem em uma ENV por cliente.
+Tokens de bots não ficam em ENV por cliente.
 
-Cada bot fica em `channel_accounts`:
-
-```text
-organização
-canal = telegram
-account_key
-nome
-id externo
-credencial criptografada
-segredo de webhook criptografado
-status
-```
-
-Uma única chave de infraestrutura, `CAMPOEDADOS_CREDENTIAL_ENCRYPTION_KEY`, protege essas credenciais. Essa chave só precisa ser configurada quando contas Telegram reais forem ativadas e nunca deve ser gravada no banco ou no GitHub.
+Cada bot fica em `channel_accounts`, com credencial e segredo de webhook criptografados. Uma única chave de infraestrutura, `CAMPOEDADOS_CREDENTIAL_ENCRYPTION_KEY`, protege essas credenciais quando o Telegram for ativado.
 
 ## Render Blueprint
 
@@ -129,13 +155,11 @@ O Blueprint pede apenas cinco valores secretos na criação inicial:
 DATABASE_URL
 MIGRATION_DATABASE_URL
 SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SECRET_KEY
 OPENAI_API_KEY
 ```
 
 Demais ajustes de infraestrutura possuem valores no `render.yaml`.
-
-Credenciais opcionais de canais não fazem parte do formulário inicial do Blueprint.
 
 ## Readiness
 
@@ -144,24 +168,19 @@ Credenciais opcionais de canais não fazem parte do formulário inicial do Bluep
 
 Se banco ou storage estiverem indisponíveis, `/ready` retorna `503`.
 
-## Primeiro cliente/administrador
-
-A Base 06.1 remove o bootstrap automático. O primeiro cadastro será feito deliberadamente no banco durante a homologação. Depois disso, cadastro de organizações, usuários, unidades, módulos e canais deve ocorrer pela camada administrativa do próprio Campo e Dados.
-
-Esse procedimento evita transformar um mecanismo provisório de deploy em modelo permanente de provisionamento.
-
 ## Ordem atual de homologação
 
-1. Criar projeto Supabase exclusivo de homologação.
-2. Criar bucket privado `campoedados-staging-media`.
-3. Criar serviço Render pelo `render.yaml`.
-4. Informar somente os cinco secrets iniciais.
-5. Deploy executa `alembic upgrade head` + preflight.
-6. Conferir `/health` e `/ready`.
-7. Criar o primeiro cadastro administrativo no PostgreSQL.
-8. Cadastrar organização, unidades e módulos no banco.
-9. Ativar Telegram ou WhatsApp quando desejado.
-10. Enviar a primeira mensagem real e conferir Evento + auditoria.
+1. Supabase e bucket privado criados.
+2. Render criado pelo `render.yaml`.
+3. Deploy verde com migrations e preflight.
+4. Aplicar Base 06.3 pelo próximo deploy.
+5. Executar onboarding controlado no Render Shell.
+6. Confirmar organização, usuário, unidades, módulos e permissões no PostgreSQL.
+7. Testar API autenticada com o token administrativo.
+8. Cadastrar dados mínimos do primeiro módulo em homologação.
+9. Enviar primeiro Evento real pelo Agente Operador.
+10. Testar foto/PDF/áudio e Agente Gerencial.
+11. Ativar Telegram/WhatsApp real quando desejado.
 
 ## CI
 
@@ -169,6 +188,8 @@ O GitHub Actions sobe PostgreSQL 16 e valida:
 
 1. instalação do projeto;
 2. migrations até `head`;
-3. existência de `channel_accounts`;
-4. RLS habilitado nas tabelas do produto;
-5. suíte completa das Bases 01–06.1.
+3. 28 tabelas esperadas;
+4. RLS em todas as tabelas públicas, inclusive `alembic_version`;
+5. ausência do índice duplicado em `access_tokens.token_hash`;
+6. onboarding transacional e regras de módulos;
+7. suíte completa sem regressões.

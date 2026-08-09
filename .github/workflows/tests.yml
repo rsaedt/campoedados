@@ -56,9 +56,18 @@ jobs:
                   con.execute(text("select relname from pg_class where relkind='r' and relrowsecurity=true"))
                   .scalars()
               )
-          app_tables = expected - {"alembic_version"}
-          assert app_tables <= protected, f"Tabelas sem RLS: {sorted(app_tables - protected)}"
-          print(f"migration ok: {len(tables)} tables; rls ok: {len(app_tables)} app tables")
+              token_hash_indexes = con.execute(
+                  text("""
+                      select count(*)
+                      from pg_indexes
+                      where schemaname='public'
+                        and tablename='access_tokens'
+                        and indexdef like '%(token_hash)%'
+                  """)
+              ).scalar_one()
+          assert expected <= protected, f"Tabelas sem RLS: {sorted(expected - protected)}"
+          assert token_hash_indexes == 1, "access_tokens.token_hash deve ter apenas um índice único"
+          print(f"migration ok: {len(tables)} tables; rls ok: {len(expected)} tables; token_hash index ok")
           PY
       - name: Test
         run: python -m pytest
