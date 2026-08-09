@@ -66,6 +66,8 @@ def main() -> int:
         for item in os.getenv("CAMPOEDADOS_BOOTSTRAP_MODULES", "").split(",")
         if item.strip()
     ]
+    if not modules:
+        raise RuntimeError("CAMPOEDADOS_BOOTSTRAP_MODULES precisa habilitar ao menos um módulo.")
     invalid = set(modules) - ALLOWED_MODULES
     if invalid:
         raise RuntimeError(f"Módulos inválidos no bootstrap: {sorted(invalid)}")
@@ -205,7 +207,7 @@ def main() -> int:
         print(f"staging bootstrap: organization={org.slug}")
         print(f"staging bootstrap: admin={admin_email}")
         print(f"staging bootstrap: units={','.join(sorted(units_by_code))}")
-        print(f"staging bootstrap: modules={','.join(sorted(modules)) or 'none'}")
+        print(f"staging bootstrap: modules={','.join(sorted(modules))}")
         print(f"staging bootstrap: channel_identities={len(identities)}")
     return 0
 
