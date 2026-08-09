@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.services.auth import Principal
-from app.services.channel_accounts import create_channel_account
+from app.services.channel_accounts import ChannelAccountError, create_channel_account
 
 
 class TelegramAdminError(RuntimeError):
@@ -96,6 +96,8 @@ def connect_telegram_bot(
             display_name=name,
             webhook_url=webhook_url,
         )
+    except ChannelAccountError as exc:
+        raise TelegramAdminError(str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         detail = None
         try:
