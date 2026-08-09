@@ -8,12 +8,16 @@ from app.main import app
 from app.models.domain import (
     AuditEntry,
     Event,
+    EventModuleTarget,
     InventoryBalance,
     Membership,
     Organization,
+    OrganizationModule,
     Product,
+    SystemModule,
     Unit,
     User,
+    UserModulePermission,
 )
 from app.services.auth import issue_access_token
 
@@ -23,6 +27,25 @@ def test_decision_overview_summarizes_each_farm_without_mixing_product_quantitie
     user = User(display_name="Gestor", active=True)
     session.add_all([org, user])
     session.flush()
+
+    feed_module = SystemModule(code="feed_mill", name="Fábrica de Ração", active=True)
+    livestock_module = SystemModule(code="livestock", name="Pecuária", active=True)
+    session.add_all([feed_module, livestock_module])
+    session.flush()
+    session.add_all(
+        [
+            OrganizationModule(
+                organization_id=org.id,
+                module_code="feed_mill",
+                enabled=True,
+            ),
+            OrganizationModule(
+                organization_id=org.id,
+                module_code="livestock",
+                enabled=True,
+            ),
+        ]
+    )
 
     membership = Membership(
         organization_id=org.id,
@@ -53,6 +76,22 @@ def test_decision_overview_summarizes_each_farm_without_mixing_product_quantitie
 
     session.add_all(
         [
+            UserModulePermission(
+                membership_id=membership.id,
+                module_code="feed_mill",
+                can_view=True,
+                can_register=True,
+                can_approve=True,
+                can_configure=True,
+            ),
+            UserModulePermission(
+                membership_id=membership.id,
+                module_code="livestock",
+                can_view=True,
+                can_register=True,
+                can_approve=True,
+                can_configure=True,
+            ),
             InventoryBalance(
                 organization_id=org.id,
                 unit_id=sh7.id,
@@ -94,14 +133,28 @@ def test_decision_overview_summarizes_each_farm_without_mixing_product_quantitie
     )
     session.add_all([manager_event, complement_event])
     session.flush()
-    session.add(
-        AuditEntry(
-            organization_id=org.id,
-            event_id=manager_event.id,
-            actor_user_id=user.id,
-            action="operator_event_waiting_manager",
-            details={"reason": "Estoque insuficiente para Milho: disponível=0, solicitado=700."},
-        )
+    session.add_all(
+        [
+            EventModuleTarget(
+                event_id=manager_event.id,
+                module_code="feed_mill",
+                status=EventStatus.WAITING_MANAGER.value,
+                requires_approval=True,
+            ),
+            EventModuleTarget(
+                event_id=complement_event.id,
+                module_code="livestock",
+                status=EventStatus.WAITING_COMPLEMENT.value,
+                requires_approval=False,
+            ),
+            AuditEntry(
+                organization_id=org.id,
+                event_id=manager_event.id,
+                actor_user_id=user.id,
+                action="operator_event_waiting_manager",
+                details={"reason": "Estoque insuficiente para Milho: disponível=0, solicitado=700."},
+            ),
+        ]
     )
     _, raw = issue_access_token(
         session,
@@ -154,3 +207,5 @@ def test_dashboard_html_exposes_decision_sections_and_human_labels():
     assert "Estoque (valor)" in response.text
     assert "Produção de ração" in response.text
     assert "Aguardando complemento" in response.text
+    assert "Seus módulos" in response.text
+    assert 'id="moduleNav"' in response.text
