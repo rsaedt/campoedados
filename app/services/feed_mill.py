@@ -101,6 +101,8 @@ def dispatch_transfer(
     product_id: str,
     quantity,
     event_id: str | None = None,
+    declared_quantity=None,
+    declared_unit: str | None = None,
 ) -> Transfer:
     require_module(session, organization_id, ModuleCode.FEED_MILL.value)
     if source_unit_id == destination_unit_id:
@@ -125,6 +127,8 @@ def dispatch_transfer(
         product_id=product_id,
         dispatch_event_id=event_id,
         quantity=qty,
+        declared_quantity=q_qty(d(declared_quantity)) if declared_quantity is not None else None,
+        declared_unit=declared_unit,
         unit_cost=unit_cost,
         total_value=total_value,
         status=TransferStatus.IN_TRANSIT.value,
@@ -140,27 +144,40 @@ def receive_transfer(
     organization_id: str,
     transfer_id: str,
     event_id: str | None = None,
+    received_quantity=None,
+    approve_divergence: bool = False,
 ) -> Transfer:
     require_module(session, organization_id, ModuleCode.FEED_MILL.value)
     transfer = session.get(Transfer, transfer_id)
     if transfer is None or transfer.organization_id != organization_id:
         raise InvalidTransferError("Transferência não encontrada.")
-    if transfer.status != TransferStatus.IN_TRANSIT.value:
-        raise InvalidTransferError("Somente transferências em trânsito podem ser recebidas.")
+    if transfer.status not in {TransferStatus.IN_TRANSIT.value, TransferStatus.DIVERGENT.value}:
+        raise InvalidTransferError("Somente transferências em trânsito/divergentes podem ser recebidas.")
+
+    actual_qty = q_qty(d(received_quantity if received_quantity is not None else transfer.quantity))
+    dispatched_qty = q_qty(d(transfer.quantity))
+    divergence = q_qty(actual_qty - dispatched_qty)
+    transfer.receipt_event_id = event_id or transfer.receipt_event_id
+    transfer.received_quantity = actual_qty
+    transfer.divergence_quantity = divergence
+
+    if divergence != 0 and not approve_divergence:
+        transfer.status = TransferStatus.DIVERGENT.value
+        session.flush()
+        return transfer
 
     receive_stock(
         session,
         organization_id=organization_id,
         unit_id=transfer.destination_unit_id,
         product_id=transfer.product_id,
-        quantity=transfer.quantity,
+        quantity=actual_qty,
         unit_cost=transfer.unit_cost,
         movement_type=MovementType.TRANSFER_RECEIPT.value,
         event_id=event_id,
         reference_type="transfer",
         reference_id=transfer.id,
     )
-    transfer.receipt_event_id = event_id
     transfer.status = TransferStatus.RECEIVED.value
     transfer.received_at = datetime.now(timezone.utc)
     session.flush()
