@@ -8,8 +8,9 @@ from app.models.domain import Approval, Event, EventModuleTarget, Purchase, Tran
 from app.schemas.manager import ManagerDecisionResponse, PendingEventItem
 from app.services.audit import record_audit
 from app.services.auth import Principal
-from app.services.feed_mill import receive_transfer
+from app.services.feed_mill import produce, receive_transfer
 from app.services.finance import approve_purchase, reject_purchase
+from app.services.inventory import InsufficientStockError
 from app.services.permissions import PermissionDeniedError, require_module_permission
 
 
@@ -88,6 +89,38 @@ def list_pending_events(session: Session, *, principal: Principal) -> list[Pendi
     return items
 
 
+def _retry_feed_mill_production(
+    session: Session,
+    *,
+    principal: Principal,
+    event: Event,
+):
+    interpretation = event.interpretation or {}
+    data = interpretation.get("data") or {}
+    recipe_id = data.get("recipe_id")
+    batch_count = data.get("batch_count")
+    if not recipe_id or batch_count is None:
+        raise ManagerEventError(
+            "Evento de produção não possui fórmula e quantidade de batidas suficientes para reprocessamento."
+        )
+    if event.unit_id is None:
+        raise ManagerEventError("Evento de produção não possui unidade de origem.")
+
+    try:
+        return produce(
+            session,
+            organization_id=principal.organization_id,
+            unit_id=event.unit_id,
+            recipe_id=recipe_id,
+            batch_count=batch_count,
+            event_id=event.id,
+        )
+    except InsufficientStockError as exc:
+        raise ManagerEventError(
+            f"A produção continua bloqueada por estoque insuficiente: {exc}"
+        ) from exc
+
+
 def decide_event(
     session: Session,
     *,
@@ -110,6 +143,8 @@ def decide_event(
 
     processed_modules: list[str] = []
     for target in targets:
+        audit_details = {"module_code": target.module_code, "notes": notes}
+
         if target.module_code == ModuleCode.FINANCE.value:
             purchase = session.scalar(select(Purchase).where(Purchase.event_id == event.id))
             if purchase is None:
@@ -132,29 +167,43 @@ def decide_event(
             processed_modules.append(target.module_code)
 
         elif target.module_code == ModuleCode.FEED_MILL.value:
-            transfer = session.scalar(
-                select(Transfer).where(
-                    Transfer.receipt_event_id == event.id,
-                    Transfer.status == TransferStatus.DIVERGENT.value,
-                )
-            )
-            if transfer is not None and decision == "approve":
-                receive_transfer(
-                    session,
-                    organization_id=principal.organization_id,
-                    transfer_id=transfer.id,
-                    event_id=event.id,
-                    received_quantity=accepted_quantity or transfer.received_quantity,
-                    approve_divergence=True,
-                )
-                target.status = EventStatus.PROCESSED.value
-            elif decision == "approve":
-                # Não conformidade de recebimento já está refletida no estoque físico; aprovação apenas fecha a exceção.
-                target.status = EventStatus.PROCESSED.value
+            if event.event_type == "feed_mill.production":
+                if decision == "approve":
+                    production = _retry_feed_mill_production(
+                        session,
+                        principal=principal,
+                        event=event,
+                    )
+                    target.status = EventStatus.PROCESSED.value
+                    audit_details["production_batch_id"] = production.id
+                else:
+                    target.status = EventStatus.REJECTED.value
+                target.requires_approval = False
+                processed_modules.append(target.module_code)
             else:
-                target.status = EventStatus.REJECTED.value
-            target.requires_approval = False
-            processed_modules.append(target.module_code)
+                transfer = session.scalar(
+                    select(Transfer).where(
+                        Transfer.receipt_event_id == event.id,
+                        Transfer.status == TransferStatus.DIVERGENT.value,
+                    )
+                )
+                if transfer is not None and decision == "approve":
+                    receive_transfer(
+                        session,
+                        organization_id=principal.organization_id,
+                        transfer_id=transfer.id,
+                        event_id=event.id,
+                        received_quantity=accepted_quantity or transfer.received_quantity,
+                        approve_divergence=True,
+                    )
+                    target.status = EventStatus.PROCESSED.value
+                elif decision == "approve":
+                    # Não conformidade de recebimento já está refletida no estoque físico; aprovação apenas fecha a exceção.
+                    target.status = EventStatus.PROCESSED.value
+                else:
+                    target.status = EventStatus.REJECTED.value
+                target.requires_approval = False
+                processed_modules.append(target.module_code)
 
         session.add(
             Approval(
@@ -171,7 +220,7 @@ def decide_event(
             event_id=event.id,
             actor_user_id=principal.user_id,
             action=f"manager_{decision}",
-            details={"module_code": target.module_code, "notes": notes},
+            details=audit_details,
         )
 
     _recompute_event_status(session, event)
