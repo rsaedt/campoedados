@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import NullPool
 
@@ -7,6 +9,7 @@ import app.main as main_module
 from app.core.database import build_engine, normalize_database_url
 from app.main import app
 from app.services import media_storage as storage_module
+from app.services.channel_accounts import CredentialCipher
 from app.services.media_storage import SupabaseMediaStorage, media_storage_is_configured
 
 
@@ -87,6 +90,18 @@ def test_legacy_service_role_remains_compatible(monkeypatch):
     assert _FakeClient.last_headers["Authorization"] == "Bearer legacy-jwt"
 
 
+def test_render_blueprint_generates_channel_encryption_secret():
+    blueprint = Path("render.yaml").read_text(encoding="utf-8")
+    assert "CAMPOEDADOS_CREDENTIAL_ENCRYPTION_KEY" in blueprint
+    assert "generateValue: true" in blueprint
+
+
+def test_render_generated_256_bit_base64_is_fernet_compatible():
+    cipher = CredentialCipher("B0jrphAPOY7pg92AN0c9MN4yecczLMdwnx4OkA1KFUk=")
+    encrypted = cipher.encrypt("telegram-secret")
+    assert cipher.decrypt(encrypted) == "telegram-secret"
+
+
 def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
     monkeypatch.setattr(main_module, "database_is_ready", lambda: False)
     monkeypatch.setenv("CAMPOEDADOS_MEDIA_STORAGE", "filesystem")
@@ -104,12 +119,13 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     body = response.json()
     assert body["status"] == "ready"
     assert body["environment"] == "staging"
-    assert body["version"] == "0.7.1"
+    assert body["version"] == "0.7.2"
     assert body["dashboard"] is True
     assert body["web_user_login"] is True
     assert body["web_session_cookie"] is True
     assert body["telegram_dashboard_connect"] is True
     assert body["telegram_contact_linking"] is True
+    assert body["channel_credential_encryption"] is True
     assert body["channel_accounts_in_database"] is True
     assert body["controlled_onboarding"] is True
     assert body["controlled_admin_ops"] is True
