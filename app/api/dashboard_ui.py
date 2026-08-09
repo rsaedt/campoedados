@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app.services.web_auth import SESSION_COOKIE
 
@@ -19,7 +19,7 @@ def login_page():
 @router.get("/dashboard", include_in_schema=False)
 def dashboard_page(request: Request):
     if not request.cookies.get(SESSION_COOKIE):
-        return RedirectResponse(url="/login", status_code=303)
+        return FileResponse(LOGIN_FILE, media_type="text/html")
 
     html = DASHBOARD_FILE.read_text(encoding="utf-8")
     html = html.replace(
