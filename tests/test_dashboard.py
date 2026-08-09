@@ -1,5 +1,4 @@
 from decimal import Decimal
-from types import SimpleNamespace
 
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -13,6 +12,7 @@ from app.models.channel import ChannelAccount, ChannelContactRequest, ChannelIde
 from app.models.domain import AuditEntry, InventoryBalance, InventoryMovement, Membership, Organization, Product, Unit, User, UserModulePermission
 from app.services.auth import Principal, issue_access_token
 from app.services.modules import set_module_enabled
+from app.services.openai_multimodal import get_multimodal_ai
 from app.services.telegram_admin import connect_telegram_bot
 
 
@@ -157,6 +157,7 @@ def test_unknown_telegram_contact_appears_and_can_be_linked(session, tmp_path, m
     def override_db():
         yield session
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_multimodal_ai] = lambda: object()
     client = TestClient(app)
     update = {
         "update_id": 10,
