@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campo & Dados — Dashboard</title>
+  <style>
+    :root{--bg:#f4f6f3;--card:#fff;--text:#1b251d;--muted:#67736a;--line:#dce3dd;--brand:#315b3b;--brand2:#24472d;--warn:#8a5a00;--danger:#9b2c2c;--ok:#236b39;--shadow:0 10px 30px rgba(30,50,35,.08)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}
+    .top{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+    .top-inner{max-width:1500px;margin:auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .brand{font-weight:800;font-size:21px;color:var(--brand)} .brand span{color:#8b7a42}.who{font-size:13px;color:var(--muted);text-align:right}
+    .layout{max-width:1500px;margin:auto;padding:24px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px}
+    nav{display:flex;flex-direction:column;gap:7px;position:sticky;top:82px;height:max-content}.navbtn{border:0;background:transparent;padding:11px 13px;border-radius:10px;text-align:left;color:#435047}.navbtn.active,.navbtn:hover{background:#e3ebe5;color:var(--brand2);font-weight:700}
+    main{min-width:0}.page{display:none}.page.active{display:block}.title-row{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:18px}.title-row h1{margin:0;font-size:26px}.subtitle{margin:5px 0 0;color:var(--muted)}
+    .btn{border:0;border-radius:9px;padding:9px 14px;background:var(--brand);color:white;font-weight:700}.btn:hover{background:var(--brand2)}.btn.secondary{background:#eef2ef;color:#314237}.btn.danger{background:var(--danger)}.btn.warn{background:#875f12}.btn.small{padding:6px 10px;font-size:13px}
+    .cards{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:12px;margin-bottom:20px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:var(--shadow)}.metric{font-size:27px;font-weight:800;margin-top:8px}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}.panel-head{padding:15px 17px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}.panel-head h2{font-size:17px;margin:0}.panel-body{padding:17px}
+    .table-wrap{overflow:auto} table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #edf0ed;vertical-align:top}th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#fafbfa;position:sticky;top:0}.status{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ef;font-size:11px;font-weight:700}.status.waiting_manager{background:#fff2d8;color:#7d5100}.status.processed{background:#e5f4e8;color:#246237}.status.waiting_complement{background:#f8e9d7;color:#7c4b13}.status.rejected{background:#f8dfdf;color:#8c2f2f}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}label{font-size:12px;font-weight:700;color:#4d5c52}input,select,textarea{width:100%;border:1px solid #cfd8d1;border-radius:9px;padding:10px 11px;background:white;color:var(--text)}input:focus,select:focus,textarea:focus{outline:2px solid #b9cfbf;border-color:#7ea28a}.hint{font-size:12px;color:var(--muted)}
+    .empty{padding:24px;text-align:center;color:var(--muted)}.alert{padding:11px 13px;border-radius:9px;margin-bottom:12px;display:none}.alert.show{display:block}.alert.ok{background:#e7f5ea;color:#235f35}.alert.err{background:#fae5e5;color:#872e2e}.contact{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:#fbfcfb}.contact-top{display:flex;justify-content:space-between;gap:15px;margin-bottom:11px}.contact-name{font-weight:800}.contact-msg{color:var(--muted);font-size:13px;margin-top:4px}
+    .login-cover{position:fixed;inset:0;background:rgba(22,31,24,.72);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}.login-card{max-width:480px;width:100%;background:white;border-radius:18px;padding:28px;box-shadow:0 25px 80px rgba(0,0,0,.3)}.login-card h1{margin-top:0;color:var(--brand)}.login-card.hidden{display:none}
+    .modules{display:flex;gap:8px;flex-wrap:wrap}.module{background:#edf3ee;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;color:#36523e}.actions{display:flex;gap:7px;flex-wrap:wrap}.nowrap{white-space:nowrap}.source{max-width:520px}.muted{color:var(--muted)}
+    @media(max-width:1100px){.layout{grid-template-columns:1fr}nav{position:static;flex-direction:row;overflow:auto}.cards{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
+    @media(max-width:650px){.top-inner,.layout{padding-left:14px;padding-right:14px}.cards{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.who{display:none}.title-row{align-items:start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="login-cover" id="loginCover">
+    <div class="login-card" id="loginCard">
+      <h1>Campo & Dados</h1>
+      <p>Dashboard de homologação. Informe o token administrativo. Ele fica somente nesta sessão do navegador.</p>
+      <div id="loginAlert" class="alert err"></div>
+      <div class="field"><label>Token administrativo</label><input id="tokenInput" type="password" autocomplete="off" placeholder="Cole o token" /></div>
+      <div style="margin-top:14px"><button class="btn" id="loginBtn">Entrar</button></div>
+    </div>
+  </div>
+
+  <header class="top"><div class="top-inner"><div class="brand">Campo <span>&</span> Dados</div><div class="who" id="who">Carregando...</div></div></header>
+  <div class="layout">
+    <nav>
+      <button class="navbtn active" data-page="overview">Visão geral</button>
+      <button class="navbtn" data-page="events">Eventos</button>
+      <button class="navbtn" data-page="manager">Gerencial</button>
+      <button class="navbtn" data-page="inventory">Estoque</button>
+      <button class="navbtn" data-page="telegram">Telegram</button>
+      <button class="navbtn" id="logoutBtn">Sair</button>
+    </nav>
+    <main>
+      <div id="globalAlert" class="alert"></div>
+
+      <section class="page active" id="page-overview">
+        <div class="title-row"><div><h1>Visão geral</h1><p class="subtitle">Situação atual da operação.</p></div><button class="btn secondary" onclick="refresh()">Atualizar</button></div>
+        <div class="cards" id="summaryCards"></div>
+        <div class="grid2">
+          <div class="panel"><div class="panel-head"><h2>Módulos liberados</h2></div><div class="panel-body"><div class="modules" id="modules"></div></div></div>
+          <div class="panel"><div class="panel-head"><h2>Unidades</h2></div><div class="panel-body" id="unitsOverview"></div></div>
+        </div>
+        <div class="panel"><div class="panel-head"><h2>Últimos eventos</h2></div><div class="table-wrap" id="overviewEvents"></div></div>
+      </section>
+
+      <section class="page" id="page-events">
+        <div class="title-row"><div><h1>Eventos de Campo</h1><p class="subtitle">O que chegou pelos canais e como foi interpretado.</p></div><button class="btn secondary" onclick="refresh()">Atualizar</button></div>
+        <div class="panel"><div class="table-wrap" id="eventsTable"></div></div>
+      </section>
+
+      <section class="page" id="page-manager">
+        <div class="title-row"><div><h1>Agente Gerencial</h1><p class="subtitle">Exceções e decisões que precisam de atenção.</p></div><button class="btn secondary" onclick="refresh()">Atualizar</button></div>
+        <div class="panel"><div class="table-wrap" id="managerTable"></div></div>
+        <div class="panel"><div class="panel-head"><h2>Produções recentes</h2></div><div class="table-wrap" id="productionsTable"></div></div>
+      </section>
+
+      <section class="page" id="page-inventory">
+        <div class="title-row"><div><h1>Estoque</h1><p class="subtitle">Saldos físicos e custos médios por unidade.</p></div><button class="btn secondary" onclick="refresh()">Atualizar</button></div>
+        <div class="grid2">
+          <div class="panel"><div class="panel-head"><h2>Saldos</h2></div><div class="table-wrap" id="inventoryTable"></div></div>
+          <div class="panel"><div class="panel-head"><h2>Entrada/Ajuste de homologação</h2></div><div class="panel-body">
+            <div class="form-grid">
+              <div class="field"><label>Unidade</label><select id="adjustUnit"></select></div>
+              <div class="field"><label>Produto</label><select id="adjustProduct"></select></div>
+              <div class="field"><label>Quantidade</label><input id="adjustQty" type="number" min="0.0001" step="0.0001" /></div>
+              <div class="field"><label>Custo unitário</label><input id="adjustCost" type="number" min="0" step="0.000001" /></div>
+              <div class="field full"><label>Observação</label><input id="adjustNote" placeholder="Ex.: saldo inicial homologação" /></div>
+            </div>
+            <p class="hint">Este lançamento entra pelo livro de movimentos e fica auditado.</p>
+            <button class="btn" id="adjustBtn">Registrar entrada</button>
+          </div></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-telegram">
+        <div class="title-row"><div><h1>Telegram</h1><p class="subtitle">Conecte o bot e vincule os contatos sem descobrir IDs manualmente.</p></div><button class="btn secondary" onclick="refresh()">Atualizar</button></div>
+        <div class="grid2">
+          <div class="panel"><div class="panel-head"><h2>Conectar bot</h2></div><div class="panel-body">
+            <div class="form-grid">
+              <div class="field"><label>Identificador interno</label><input id="tgKey" value="agro-homolog" placeholder="ex.: agro-homolog" /></div>
+              <div class="field"><label>Nome no painel</label><input id="tgName" placeholder="ex.: Bot Campo & Dados" /></div>
+              <div class="field full"><label>Token do BotFather</label><input id="tgToken" type="password" autocomplete="off" placeholder="Cole o token do bot" /></div>
+            </div>
+            <p class="hint">O sistema valida o bot e configura o webhook automaticamente.</p>
+            <button class="btn" id="connectTelegramBtn">Conectar Telegram</button>
+          </div></div>
+          <div class="panel"><div class="panel-head"><h2>Bots conectados</h2></div><div class="panel-body" id="telegramAccounts"></div></div>
+        </div>
+        <div class="panel"><div class="panel-head"><h2>Contatos aguardando vínculo</h2><span class="hint">Envie uma mensagem ao bot para aparecer aqui.</span></div><div class="panel-body" id="pendingContacts"></div></div>
+      </section>
+    </main>
+  </div>
+
+<script>
+let state = null;
+const fmt = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:4});
+const money = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+function token(){return sessionStorage.getItem('campoedados_token')||''}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function showAlert(msg,type='ok'){const a=document.getElementById('globalAlert');a.textContent=msg;a.className='alert show '+type;setTimeout(()=>a.className='alert',5000)}
+async function api(path,options={}){const headers={...(options.headers||{}),'Authorization':'Bearer '+token()};if(options.body&&!headers['Content-Type'])headers['Content-Type']='application/json';const r=await fetch(path,{...options,headers});let body=null;try{body=await r.json()}catch{}if(!r.ok)throw new Error(body?.detail||('Erro HTTP '+r.status));return body}
+async function login(){const t=document.getElementById('tokenInput').value.trim();if(!t)return;sessionStorage.setItem('campoedados_token',t);try{await api('/v1/me');document.getElementById('loginCover').style.display='none';await refresh()}catch(e){sessionStorage.removeItem('campoedados_token');const a=document.getElementById('loginAlert');a.textContent=e.message;a.className='alert err show'}}
+function logout(){sessionStorage.removeItem('campoedados_token');location.reload()}
+function statusBadge(s){return `<span class="status ${esc(s)}">${esc(s)}</span>`}
+function table(headers,rows){if(!rows.length)return '<div class="empty">Nenhum registro.</div>';return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`}
+async function refresh(){try{state=await api('/v1/dashboard/overview');render()}catch(e){if(/Token|401|autent/i.test(e.message)){sessionStorage.removeItem('campoedados_token');location.reload();return}showAlert(e.message,'err')}}
+function render(){
+  document.getElementById('who').innerHTML=`<b>${esc(state.me.display_name)}</b><br>${esc(state.me.organization)} · ${esc(state.me.role)}`;
+  const s=state.summary;const metrics=[['Eventos',s.events],['Processados',s.processed],['Pend. gerencial',s.pending_manager],['Contatos Telegram',s.pending_contacts],['Unidades',s.units],['Produtos',s.products]];
+  document.getElementById('summaryCards').innerHTML=metrics.map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="metric">${fmt.format(x[1])}</div></div>`).join('');
+  document.getElementById('modules').innerHTML=state.modules.map(m=>`<span class="module">${esc(m.name)}</span>`).join('')||'<span class="muted">Nenhum módulo.</span>';
+  document.getElementById('unitsOverview').innerHTML=state.units.map(u=>`<div><b>${esc(u.code)}</b> — ${esc(u.name)}</div>`).join('');
+  const eventRows=state.events.map(e=>`<tr><td class="nowrap">${new Date(e.received_at).toLocaleString('pt-BR')}</td><td>${esc(e.unit_code||'-')}</td><td>${esc(e.channel)}</td><td>${esc(e.event_type||'-')}</td><td>${statusBadge(e.status)}</td><td class="source">${esc(e.source_original)}</td></tr>`);
+  const eventHtml=table(['Data','Unidade','Canal','Tipo','Status','Origem'],eventRows);document.getElementById('eventsTable').innerHTML=eventHtml;document.getElementById('overviewEvents').innerHTML=table(['Data','Unidade','Tipo','Status','Origem'],eventRows.slice(0,8).map(r=>r.replace(/<td>[^<]*<\/td><td>/,'<td>')));
+  const managerRows=state.pending_manager.map(e=>`<tr><td>${esc(e.unit_code||'-')}</td><td>${esc(e.event_type)}</td><td class="source">${esc(e.source_original)}</td><td>${statusBadge(e.status)}</td><td><div class="actions"><button class="btn small" onclick="managerDecision('${e.event_id}','approve')">Aprovar</button><button class="btn danger small" onclick="managerDecision('${e.event_id}','reject')">Rejeitar</button></div></td></tr>`);document.getElementById('managerTable').innerHTML=table(['Unidade','Tipo','Origem','Status','Ação'],managerRows);
+  const prodRows=state.productions.map(p=>`<tr><td>${new Date(p.created_at).toLocaleString('pt-BR')}</td><td>${esc(p.unit_code)}</td><td>${esc(p.recipe_name)}</td><td>${fmt.format(p.batch_count)}</td><td>${fmt.format(p.output_quantity)} kg</td><td>${money.format(p.total_material_cost)}</td></tr>`);document.getElementById('productionsTable').innerHTML=table(['Data','Unidade','Fórmula','Batidas','Produção','Custo'],prodRows);
+  const invRows=state.inventory.map(i=>`<tr><td>${esc(i.unit_code)}</td><td>${esc(i.product_name)}</td><td>${fmt.format(i.quantity)}</td><td>${money.format(i.avg_unit_cost)}</td><td>${money.format(i.total_value)}</td></tr>`);document.getElementById('inventoryTable').innerHTML=table(['Unidade','Produto','Quantidade','Custo médio','Valor'],invRows);
+  document.getElementById('adjustUnit').innerHTML=state.units.map(u=>`<option value="${esc(u.code)}">${esc(u.code)} — ${esc(u.name)}</option>`).join('');
+  const raws=state.products.filter(p=>p.product_type==='raw_material');document.getElementById('adjustProduct').innerHTML=raws.map(p=>`<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.base_unit)})</option>`).join('');
+  document.getElementById('telegramAccounts').innerHTML=state.telegram_accounts.length?state.telegram_accounts.map(a=>`<div class="contact"><div class="contact-name">${esc(a.display_name||a.account_key)}</div><div class="hint">${esc(a.account_key)} · ${a.active?'ativo':'inativo'} · credencial ${a.credential_configured?'configurada':'ausente'}</div></div>`).join(''):'<div class="empty">Nenhum bot conectado.</div>';
+  renderContacts();
+}
+function renderContacts(){const el=document.getElementById('pendingContacts');if(!state.pending_contacts.length){el.innerHTML='<div class="empty">Nenhum contato aguardando vínculo.</div>';return}el.innerHTML=state.pending_contacts.map(c=>`<div class="contact"><div class="contact-top"><div><div class="contact-name">${esc(c.display_name||('Telegram '+c.external_user_id))}</div><div class="contact-msg">${esc(c.last_message||'Mensagem recebida')}</div><div class="hint">Bot: ${esc(c.account_key)}</div></div><div class="hint">${new Date(c.last_seen_at).toLocaleString('pt-BR')}</div></div><div class="form-grid"><div class="field"><label>Usuário</label><select id="member-${c.id}">${state.memberships.map(m=>`<option value="${esc(m.id)}">${esc(m.display_name)} — ${esc(m.role)}</option>`).join('')}</select></div><div class="field"><label>Unidade padrão</label><select id="unit-${c.id}">${state.units.map(u=>`<option value="${esc(u.code)}">${esc(u.code)} — ${esc(u.name)}</option>`).join('')}</select></div></div><div style="margin-top:10px"><button class="btn small" onclick="linkContact('${c.id}')">Vincular contato</button></div></div>`).join('')}
+async function managerDecision(id,decision){const notes=prompt(decision==='approve'?'Observação da aprovação (opcional):':'Motivo da rejeição (opcional):')||null;try{await api(`/v1/manager/events/${id}/decision`,{method:'POST',body:JSON.stringify({decision,notes})});showAlert('Decisão registrada.');await refresh()}catch(e){showAlert(e.message,'err')}}
+async function adjustInventory(){const payload={unit_code:document.getElementById('adjustUnit').value,product_id:document.getElementById('adjustProduct').value,quantity:document.getElementById('adjustQty').value,unit_cost:document.getElementById('adjustCost').value,note:document.getElementById('adjustNote').value||null};try{await api('/v1/dashboard/inventory/adjustments',{method:'POST',body:JSON.stringify(payload)});showAlert('Entrada de estoque registrada.');document.getElementById('adjustQty').value='';await refresh()}catch(e){showAlert(e.message,'err')}}
+async function connectTelegram(){const payload={account_key:document.getElementById('tgKey').value.trim(),display_name:document.getElementById('tgName').value.trim()||null,bot_token:document.getElementById('tgToken').value.trim()};try{const r=await api('/v1/dashboard/telegram/connect',{method:'POST',body:JSON.stringify(payload)});document.getElementById('tgToken').value='';showAlert(`Telegram conectado${r.bot_username?' (@'+r.bot_username+')':''}. Agora envie uma mensagem para o bot.`);await refresh()}catch(e){showAlert(e.message,'err')}}
+async function linkContact(id){const payload={membership_id:document.getElementById('member-'+id).value,default_unit_code:document.getElementById('unit-'+id).value};try{await api(`/v1/dashboard/contacts/${id}/link`,{method:'POST',body:JSON.stringify(payload)});showAlert('Contato vinculado. A próxima mensagem já será processada.');await refresh()}catch(e){showAlert(e.message,'err')}}
+document.querySelectorAll('.navbtn[data-page]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.navbtn[data-page]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById('page-'+b.dataset.page).classList.add('active')}));
+document.getElementById('loginBtn').onclick=login;document.getElementById('tokenInput').addEventListener('keydown',e=>{if(e.key==='Enter')login()});document.getElementById('logoutBtn').onclick=logout;document.getElementById('adjustBtn').onclick=adjustInventory;document.getElementById('connectTelegramBtn').onclick=connectTelegram;
+if(token()){document.getElementById('loginCover').style.display='none';refresh()}
+</script>
+</body>
+</html>

@@ -51,3 +51,31 @@ class ChannelIdentity(Base):
     display_name: Mapped[str | None] = mapped_column(String(180))
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class ChannelContactRequest(Base):
+    """Contato que falou com um canal válido, mas ainda não foi vinculado a um usuário."""
+
+    __tablename__ = "channel_contact_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "channel",
+            "account_key",
+            "external_user_id",
+            name="uq_channel_contact_request_external",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    account_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    external_user_id: Mapped[str] = mapped_column(String(180), nullable=False, index=True)
+    external_chat_id: Mapped[str | None] = mapped_column(String(180))
+    display_name: Mapped[str | None] = mapped_column(String(180))
+    last_message: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False, index=True)
+    linked_identity_id: Mapped[str | None] = mapped_column(ForeignKey("channel_identities.id"), index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

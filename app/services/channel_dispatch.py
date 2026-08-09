@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.schemas.operator import OperatorMessageRequest, OperatorMessageResponse
+from app.services.channel_contacts import record_unknown_contact
 from app.services.channel_identity import UnknownChannelIdentityError, resolve_channel_identity
 from app.services.channels.base import ChannelDispatchResult, ChannelTransport, InboundChannelMessage
 from app.services.media_storage import FileSystemMediaStorage
@@ -15,8 +16,8 @@ from app.services.operator import handle_operator_message
 
 
 UNKNOWN_CONTACT_REPLY = (
-    "Este contato ainda não está vinculado a uma empresa/unidade no Campo e Dados. "
-    "Peça ao administrador para concluir o cadastro antes de registrar operações."
+    "Recebi seu contato no Campo e Dados, mas ele ainda não está vinculado a um usuário/unidade. "
+    "O administrador já pode fazer esse vínculo pelo dashboard."
 )
 
 
@@ -115,6 +116,7 @@ def dispatch_channel_message(
             external_user_id=inbound.external_user_id,
         )
     except UnknownChannelIdentityError:
+        record_unknown_contact(session, inbound)
         return ChannelDispatchResult(reply_text=UNKNOWN_CONTACT_REPLY, unknown_identity=True)
 
     principal = resolved.principal
