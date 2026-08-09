@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import NullPool
 
@@ -30,6 +28,7 @@ def test_transaction_pooler_uses_nullpool():
 def test_supabase_storage_requires_server_side_configuration(monkeypatch):
     monkeypatch.setenv("CAMPOEDADOS_MEDIA_STORAGE", "supabase")
     monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
     monkeypatch.setenv("CAMPOEDADOS_SUPABASE_STORAGE_BUCKET", "private-media")
     assert media_storage_is_configured() is False
@@ -60,24 +59,32 @@ class _FakeClient:
         return _FakeResponse()
 
 
-def test_supabase_storage_is_private_content_addressed_and_upsert_safe(monkeypatch):
+def test_supabase_secret_key_uses_apikey_header_without_bearer(monkeypatch):
     monkeypatch.setattr(storage_module.httpx, "Client", _FakeClient)
     storage = SupabaseMediaStorage(
         supabase_url="https://project.supabase.co",
-        service_role_key="server-secret",
+        secret_key="sb_secret_example",
         bucket="campoedados-staging-media",
     )
     stored = storage.store(content=b"nota-fiscal", filename="nf.pdf", mime_type="application/pdf")
 
     assert stored.storage_ref.startswith("supabase://campoedados-staging-media/sha256/")
-    assert stored.storage_ref.endswith(".pdf")
-    assert _FakeClient.last_url.startswith(
-        "https://project.supabase.co/storage/v1/object/campoedados-staging-media/sha256/"
-    )
-    assert _FakeClient.last_headers["Authorization"] == "Bearer server-secret"
+    assert _FakeClient.last_headers["apikey"] == "sb_secret_example"
+    assert "Authorization" not in _FakeClient.last_headers
     assert _FakeClient.last_headers["x-upsert"] == "true"
-    assert _FakeClient.last_headers["Content-Type"] == "application/pdf"
     assert _FakeClient.last_content == b"nota-fiscal"
+
+
+def test_legacy_service_role_remains_compatible(monkeypatch):
+    monkeypatch.setattr(storage_module.httpx, "Client", _FakeClient)
+    storage = SupabaseMediaStorage(
+        supabase_url="https://project.supabase.co",
+        secret_key="legacy-jwt",
+        bucket="campoedados-staging-media",
+    )
+    storage.store(content=b"legacy", filename="nf.pdf", mime_type="application/pdf")
+    assert _FakeClient.last_headers["apikey"] == "legacy-jwt"
+    assert _FakeClient.last_headers["Authorization"] == "Bearer legacy-jwt"
 
 
 def test_ready_returns_503_when_database_is_unavailable(monkeypatch):
