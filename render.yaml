@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: python -m pip install -e .
-    preDeployCommand: alembic upgrade head
+    preDeployCommand: alembic upgrade head && python -m app.cli.staging_preflight
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /ready
     maxShutdownDelaySeconds: 30
