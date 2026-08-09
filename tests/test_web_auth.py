@@ -113,6 +113,11 @@ def test_login_with_user_and_password_then_logout(session, monkeypatch):
         current = client.get("/v1/auth/session")
         assert current.status_code == 200
 
+        dashboard = client.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert "Agente Gerencial" in dashboard.text
+        assert "Token administrativo" not in dashboard.text
+
         logout = client.post("/v1/auth/logout")
         assert logout.status_code == 200
         after = client.get("/v1/auth/session")
@@ -125,11 +130,11 @@ def test_login_with_user_and_password_then_logout(session, monkeypatch):
     assert web_tokens[0].revoked_at is not None
 
 
-def test_dashboard_redirects_to_login_without_cookie():
-    client = TestClient(app)
-    response = client.get("/dashboard", follow_redirects=False)
-    assert response.status_code == 303
-    assert response.headers["location"] == "/login"
+def test_dashboard_shows_user_login_without_cookie():
+    response = TestClient(app).get("/dashboard")
+    assert response.status_code == 200
+    assert "Use seu usuário e sua senha" in response.text
+    assert "Token administrativo" not in response.text
 
 
 def test_login_page_has_user_and_password_not_admin_token():
