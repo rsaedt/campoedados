@@ -143,6 +143,9 @@ def _pending_production(session, *, stock_quantity: Decimal | None):
         membership=membership,
         organization=organization,
     )
+    # Espelha a API real: o evento pendente já existe em uma transação concluída
+    # antes da tentativa posterior de decisão gerencial.
+    session.commit()
     return principal, event, milho, seca, unit
 
 
