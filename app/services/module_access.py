@@ -32,6 +32,7 @@ def accessible_modules(session: Session, principal: Principal) -> list[Accessibl
         .where(
             OrganizationModule.organization_id == principal.organization_id,
             OrganizationModule.enabled.is_(True),
+            SystemModule.active.is_(True),
             UserModulePermission.can_view.is_(True),
         )
         .order_by(SystemModule.name)
