@@ -24,12 +24,14 @@ def create_event(
     interpretation: dict | None = None,
     confidence: Decimal | None = None,
     requires_approval: bool = False,
+    correlation_id: str | None = None,
+    require_target: bool = True,
 ) -> Event:
     enabled_targets = [
         code for code in dict.fromkeys(target_modules)
         if module_enabled(session, organization_id, code)
     ]
-    if not enabled_targets:
+    if not enabled_targets and require_target:
         raise NoEnabledTargetModuleError("Nenhum dos módulos-alvo está habilitado para a organização.")
 
     event = Event(
@@ -43,6 +45,7 @@ def create_event(
         interpretation=interpretation,
         confidence=confidence,
         requires_approval=requires_approval,
+        correlation_id=correlation_id,
     )
     session.add(event)
     session.flush()

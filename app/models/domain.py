@@ -86,6 +86,18 @@ class Membership(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class AccessToken(Base):
+    __tablename__ = "access_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    membership_id: Mapped[str] = mapped_column(ForeignKey("memberships.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class UserModulePermission(Base):
     __tablename__ = "user_module_permissions"
     __table_args__ = (UniqueConstraint("membership_id", "module_code", name="uq_membership_module"),)
@@ -101,6 +113,9 @@ class UserModulePermission(Base):
 
 class Event(Base):
     __tablename__ = "events"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "channel", "correlation_id", name="uq_event_channel_correlation"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)

@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="Campo e Dados", version="0.1.0")
+from app.api.me import router as me_router
+from app.api.operator import router as operator_router
+
+app = FastAPI(title="Campo e Dados", version="0.2.0")
+app.include_router(me_router)
+app.include_router(operator_router)
 
 
 @app.get("/health")
@@ -14,4 +19,5 @@ def ready():
         "status": "ready",
         "modules": ["livestock", "feed_mill", "finance"],
         "module_contract": "independent",
+        "operator_api": True,
     }
