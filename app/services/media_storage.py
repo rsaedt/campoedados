@@ -44,6 +44,12 @@ def _safe_suffix(filename: str | None) -> str:
     return Path(filename or "upload.bin").suffix.lower()[:12]
 
 
+def _supabase_server_key() -> str:
+    # Preferir as Secret keys modernas (sb_secret_...).
+    # O fallback legado existe apenas para migração de ambientes antigos.
+    return os.getenv("SUPABASE_SECRET_KEY", "") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+
 class FileSystemMediaStorage:
     def __init__(self, base_dir: str | Path | None = None, max_bytes: int | None = None):
         self.base_dir = Path(base_dir or os.getenv("CAMPOEDADOS_UPLOAD_DIR", "var/data/uploads"))
@@ -69,19 +75,19 @@ class SupabaseMediaStorage:
         self,
         *,
         supabase_url: str | None = None,
-        service_role_key: str | None = None,
+        secret_key: str | None = None,
         bucket: str | None = None,
         max_bytes: int | None = None,
         timeout: float = 30.0,
     ):
         self.supabase_url = (supabase_url or os.getenv("SUPABASE_URL", "")).rstrip("/")
-        self.service_role_key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        self.secret_key = secret_key or _supabase_server_key()
         self.bucket = bucket or os.getenv("CAMPOEDADOS_SUPABASE_STORAGE_BUCKET", "campoedados-staging-media")
         self.max_bytes = max_bytes or int(os.getenv("CAMPOEDADOS_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024)))
         self.timeout = timeout
-        if not self.supabase_url or not self.service_role_key or not self.bucket:
+        if not self.supabase_url or not self.secret_key or not self.bucket:
             raise MediaStorageConfigurationError(
-                "Supabase Storage requer SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e CAMPOEDADOS_SUPABASE_STORAGE_BUCKET."
+                "Supabase Storage requer SUPABASE_URL, SUPABASE_SECRET_KEY e CAMPOEDADOS_SUPABASE_STORAGE_BUCKET."
             )
 
     def store(self, *, content: bytes, filename: str | None, mime_type: str | None) -> StoredMedia:
@@ -90,12 +96,16 @@ class SupabaseMediaStorage:
         object_path = f"sha256/{digest[:2]}/{digest[2:4]}/{safe_name}"
         endpoint = f"{self.supabase_url}/storage/v1/object/{self.bucket}/{object_path}"
         headers = {
-            "Authorization": f"Bearer {self.service_role_key}",
-            "apikey": self.service_role_key,
+            "apikey": self.secret_key,
             "Content-Type": mime_type or "application/octet-stream",
             # O nome é content-addressed; upsert evita falha quando o mesmo anexo for reenviado.
             "x-upsert": "true",
         }
+        # Chaves legadas service_role são JWTs e podem ser usadas como Bearer.
+        # As Secret keys modernas sb_secret_ não devem ir no header Authorization.
+        if not self.secret_key.startswith("sb_secret_"):
+            headers["Authorization"] = f"Bearer {self.secret_key}"
+
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(endpoint, headers=headers, content=content)
         if response.status_code not in {200, 201}:
@@ -120,7 +130,7 @@ def media_storage_is_configured() -> bool:
     if backend == "supabase":
         return bool(
             os.getenv("SUPABASE_URL")
-            and os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            and _supabase_server_key()
             and os.getenv("CAMPOEDADOS_SUPABASE_STORAGE_BUCKET")
         )
     return False
