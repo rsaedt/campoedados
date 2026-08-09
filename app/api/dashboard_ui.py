@@ -28,6 +28,14 @@ _OLD_BINDINGS = "document.getElementById('loginBtn').onclick=login;document.getE
 
 _NEW_BINDINGS = "document.getElementById('logoutBtn').onclick=logout;document.getElementById('adjustBtn').onclick=adjustInventory;document.getElementById('connectTelegramBtn').onclick=connectTelegram;"
 
+_PENDING_CONTACT_PANEL = '<div class="panel"><div class="panel-head"><h2>Contatos aguardando vínculo</h2><span class="hint">Envie uma mensagem ao bot para aparecer aqui.</span></div><div class="panel-body" id="pendingContacts"></div></div>'
+_LINKED_CONTACT_PANEL = _PENDING_CONTACT_PANEL + '\n        <div class="panel"><div class="panel-head"><h2>Contatos vinculados</h2><span class="hint">Corrija usuário ou unidade padrão sem intervenção técnica.</span></div><div class="panel-body" id="linkedContacts"></div></div>'
+
+_LINKED_CONTACT_JS = r'''
+function renderLinkedContacts(){const el=document.getElementById('linkedContacts');if(!el)return;const rows=state.linked_contacts||[];if(!rows.length){el.innerHTML='<div class="empty">Nenhum contato vinculado.</div>';return}el.innerHTML=rows.map(c=>`<div class="contact"><div class="contact-top"><div><div class="contact-name">${esc(c.display_name||c.user_name)}</div><div class="hint">${esc(c.channel)} · Bot: ${esc(c.account_key)}</div></div><div class="hint">Unidade atual: <b>${esc(c.default_unit_code)}</b></div></div><div class="form-grid"><div class="field"><label>Usuário</label><select id="linked-member-${c.id}">${state.memberships.map(m=>`<option value="${esc(m.id)}" ${m.id===c.membership_id?'selected':''}>${esc(m.display_name)} — ${esc(m.role)}</option>`).join('')}</select></div><div class="field"><label>Unidade padrão</label><select id="linked-unit-${c.id}">${state.units.map(u=>`<option value="${esc(u.code)}" ${u.code===c.default_unit_code?'selected':''}>${esc(u.code)} — ${esc(u.name)}</option>`).join('')}</select></div></div><div style="margin-top:10px"><button class="btn small secondary" onclick="updateLinkedContact('${c.id}')">Salvar alteração</button></div></div>`).join('')}
+async function updateLinkedContact(id){const payload={membership_id:document.getElementById('linked-member-'+id).value,default_unit_code:document.getElementById('linked-unit-'+id).value};try{await api(`/v1/dashboard/contacts/linked/${id}`,{method:'POST',body:JSON.stringify(payload)});showAlert('Vínculo atualizado. As próximas mensagens usarão a nova unidade.');await refresh()}catch(e){showAlert(e.message,'err')}}
+'''.strip()
+
 
 @router.get("/login", include_in_schema=False)
 def login_page():
@@ -59,7 +67,14 @@ def dashboard_page(request: Request):
     )
     html = html.replace(
         "async function refresh(){try{state=await api('/v1/dashboard/overview');render()}catch(e){if(/Token|401|autent/i.test(e.message)){sessionStorage.removeItem('campoedados_token');location.reload();return}showAlert(e.message,'err')}}",
-        "async function refresh(){try{state=await api('/v1/dashboard/overview');render()}catch(e){if(/Sessão|401|autent/i.test(e.message)){location.replace('/login');return}showAlert(e.message,'err')}}",
+        "async function refresh(){try{state=await api('/v1/dashboard/overview');state.linked_contacts=state.me.role==='admin'?await api('/v1/dashboard/contacts/linked'):[];render()}catch(e){if(/Sessão|401|autent/i.test(e.message)){location.replace('/login');return}showAlert(e.message,'err')}}",
+        1,
+    )
+    html = html.replace(_PENDING_CONTACT_PANEL, _LINKED_CONTACT_PANEL, 1)
+    html = html.replace("  renderContacts();\n}", "  renderContacts();renderLinkedContacts();\n}", 1)
+    html = html.replace(
+        "async function managerDecision",
+        _LINKED_CONTACT_JS + "\nasync function managerDecision",
         1,
     )
     html = html.replace(_OLD_BINDINGS, _NEW_BINDINGS, 1)
