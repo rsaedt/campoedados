@@ -126,6 +126,6 @@ def test_render_blueprint_contains_only_infrastructure_secrets():
         "DATABASE_URL",
         "MIGRATION_DATABASE_URL",
         "SUPABASE_URL",
-        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SECRET_KEY",
         "OPENAI_API_KEY",
     }
