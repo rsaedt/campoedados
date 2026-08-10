@@ -119,7 +119,7 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     body = response.json()
     assert body["status"] == "ready"
     assert body["environment"] == "staging"
-    assert body["version"] == "0.7.7"
+    assert body["version"] == "0.7.8"
     assert body["dashboard"] is True
     assert body["decision_overview"] is True
     assert body["permission_aware_module_navigation"] is True
@@ -130,6 +130,8 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     assert body["consumption_analytics"] is True
     assert body["operator_user_channel"] == "telegram"
     assert body["dashboard_operational_entry"] is False
+    assert body["manager_stock_correction"] is True
+    assert body["manager_close_incomplete_event"] is True
     assert body["web_user_login"] is True
     assert body["web_session_cookie"] is True
     assert body["telegram_dashboard_connect"] is True
