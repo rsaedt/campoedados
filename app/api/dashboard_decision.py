@@ -34,7 +34,14 @@ def _event_reason(session: Session, event_id: str) -> str | None:
         select(AuditEntry)
         .where(
             AuditEntry.event_id == event_id,
-            AuditEntry.action == "operator_event_waiting_manager",
+            AuditEntry.action.in_(
+                [
+                    "operator_event_waiting_manager",
+                    "transfer_waiting_manager",
+                    "inventory_consumption_waiting_manager",
+                    "invoice_duplicate_blocked",
+                ]
+            ),
         )
         .order_by(AuditEntry.created_at.desc())
         .limit(1)
