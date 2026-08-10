@@ -10,7 +10,8 @@ from app.services.channel_contacts import record_unknown_contact
 from app.services.channel_identity import UnknownChannelIdentityError, resolve_channel_identity
 from app.services.channels.base import ChannelDispatchResult, ChannelTransport, InboundChannelMessage
 from app.services.media_storage import FileSystemMediaStorage
-from app.services.multimodal import process_audio_media, process_invoice_media
+from app.services.multimodal import process_invoice_media
+from app.services.multimodal_natural import process_audio_media_natural
 from app.services.openai_multimodal import MultimodalAI
 from app.services.operator_natural import handle_operator_message_natural
 
@@ -158,7 +159,7 @@ def dispatch_channel_message(
             )
             if not transcript:
                 raise ValueError("Não foi possível transcrever o áudio recebido.")
-            response = process_audio_media(
+            response = process_audio_media_natural(
                 session,
                 principal=principal,
                 transcript=transcript,
