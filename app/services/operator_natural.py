@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import EventStatus, ModuleCode
 from app.models.consumption import ConsumptionRecord
-from app.models.domain import Event, EventModuleTarget, Product, Unit
+from app.models.domain import Event, EventDocument, EventModuleTarget, Product, Unit
 from app.schemas.operator import (
     ConsumptionResult,
     ModuleStateResult,
@@ -127,9 +127,8 @@ def _target_modules(session: Session, organization_id: str, purpose_code: str) -
     if preferred and module_enabled(session, organization_id, preferred):
         return [preferred]
 
-    # Estoque é compartilhado pela fazenda. Quando a finalidade não corresponde
-    # a um módulo comercial específico, vinculamos o evento a um módulo operacional
-    # habilitado apenas para visibilidade/permissão, sem dizer que o produto "pertence" a ele.
+    # O estoque é compartilhado pela fazenda. O vínculo abaixo serve somente
+    # para visibilidade/permissão do evento, não para dizer que o produto pertence ao módulo.
     for fallback in (ModuleCode.FEED_MILL.value, ModuleCode.LIVESTOCK.value):
         if module_enabled(session, organization_id, fallback):
             return [fallback]
@@ -263,6 +262,23 @@ def _response(
     )
 
 
+def _persist_document(session: Session, event: Event, request: OperatorMessageRequest) -> None:
+    if request.document is None:
+        return
+    session.add(
+        EventDocument(
+            event_id=event.id,
+            document_type=request.document.document_type,
+            filename=request.document.filename,
+            mime_type=request.document.mime_type,
+            storage_ref=request.document.storage_ref,
+            sha256=request.document.sha256,
+            extracted_data=request.document.extracted_data,
+        )
+    )
+    session.flush()
+
+
 def handle_operator_message_natural(
     session: Session,
     *,
@@ -331,6 +347,7 @@ def handle_operator_message_natural(
         correlation_id=request.external_id,
         require_target=bool(interpretation.target_modules),
     )
+    _persist_document(session, event, request)
 
     if interpretation.missing_fields:
         event.status = EventStatus.WAITING_COMPLEMENT.value
