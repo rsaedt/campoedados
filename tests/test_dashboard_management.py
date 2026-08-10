@@ -95,8 +95,8 @@ def test_manager_can_correct_stock_to_physical_count_with_compensating_movement(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["previous_quantity"] == "700.0000"
-    assert body["target_quantity"] == "0.0000"
+    assert body["previous_quantity"] == 700.0
+    assert body["target_quantity"] == 0.0
 
     balance = session.scalar(
         select(InventoryBalance).where(
