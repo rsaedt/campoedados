@@ -52,6 +52,20 @@ class PurchaseResult(BaseModel):
     status: str
 
 
+class ConsumptionResult(BaseModel):
+    consumption_id: str
+    product_name: str
+    unit_code: str
+    quantity: Decimal
+    base_unit: str
+    unit_cost: Decimal
+    total_value: Decimal
+    purpose_code: str
+    purpose_label: str
+    context_label: str | None = None
+    remaining_quantity: Decimal
+
+
 class ModuleStateResult(BaseModel):
     module_code: str
     status: str
@@ -70,3 +84,4 @@ class OperatorMessageResponse(BaseModel):
     production: ProductionResult | None = None
     transfer: TransferResult | None = None
     purchase: PurchaseResult | None = None
+    consumption: ConsumptionResult | None = None

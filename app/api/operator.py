@@ -6,7 +6,8 @@ from app.core.database import get_db
 from app.schemas.operator import OperatorMessageRequest, OperatorMessageResponse
 from app.services.auth import Principal
 from app.services.modules import ModuleNotEnabledError
-from app.services.operator import InvalidUnitError, handle_operator_message
+from app.services.operator import InvalidUnitError
+from app.services.operator_natural import handle_operator_message_natural
 from app.services.permissions import PermissionDeniedError
 
 
@@ -20,7 +21,7 @@ def post_operator_message(
     session: Session = Depends(get_db),
 ):
     try:
-        result = handle_operator_message(session, principal=principal, request=payload)
+        result = handle_operator_message_natural(session, principal=principal, request=payload)
         session.commit()
         return result
     except (PermissionDeniedError, ModuleNotEnabledError) as exc:

@@ -4,10 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventStatus, ModuleCode, TransferStatus
+from app.models.consumption import ConsumptionRecord
 from app.models.domain import Approval, Event, EventModuleTarget, Purchase, Transfer, Unit
 from app.schemas.manager import ManagerDecisionResponse, PendingEventItem
 from app.services.audit import record_audit
 from app.services.auth import Principal
+from app.services.consumption import register_consumption
 from app.services.feed_mill import produce, receive_transfer
 from app.services.finance import approve_purchase, reject_purchase
 from app.services.inventory import InsufficientStockError
@@ -121,6 +123,51 @@ def _retry_feed_mill_production(
         ) from exc
 
 
+def _retry_inventory_consumption(
+    session: Session,
+    *,
+    principal: Principal,
+    event: Event,
+) -> ConsumptionRecord:
+    existing = session.scalar(
+        select(ConsumptionRecord).where(ConsumptionRecord.event_id == event.id)
+    )
+    if existing is not None:
+        return existing
+
+    interpretation = event.interpretation or {}
+    data = interpretation.get("data") or {}
+    product_id = data.get("product_id")
+    quantity = data.get("base_quantity")
+    purpose_code = data.get("purpose_code")
+    purpose_label = data.get("purpose_label")
+    if not product_id or quantity is None or not purpose_code or not purpose_label:
+        raise ManagerEventError(
+            "Evento de consumo não possui produto, quantidade e finalidade suficientes para reprocessamento."
+        )
+    if event.unit_id is None:
+        raise ManagerEventError("Evento de consumo não possui fazenda/unidade de origem.")
+
+    try:
+        record, _remaining = register_consumption(
+            session,
+            organization_id=principal.organization_id,
+            unit_id=event.unit_id,
+            product_id=product_id,
+            quantity=quantity,
+            event_id=event.id,
+            purpose_code=purpose_code,
+            purpose_label=purpose_label,
+            context_label=data.get("context_label"),
+            notes=event.source_original,
+        )
+        return record
+    except InsufficientStockError as exc:
+        raise ManagerEventError(
+            f"O consumo continua bloqueado por estoque insuficiente: {exc}"
+        ) from exc
+
+
 def decide_event(
     session: Session,
     *,
@@ -145,7 +192,21 @@ def decide_event(
     for target in targets:
         audit_details = {"module_code": target.module_code, "notes": notes}
 
-        if target.module_code == ModuleCode.FINANCE.value:
+        if event.event_type == "inventory.consumption":
+            if decision == "approve":
+                consumption = _retry_inventory_consumption(
+                    session,
+                    principal=principal,
+                    event=event,
+                )
+                target.status = EventStatus.PROCESSED.value
+                audit_details["consumption_id"] = consumption.id
+            else:
+                target.status = EventStatus.REJECTED.value
+            target.requires_approval = False
+            processed_modules.append(target.module_code)
+
+        elif target.module_code == ModuleCode.FINANCE.value:
             purchase = session.scalar(select(Purchase).where(Purchase.event_id == event.id))
             if purchase is None:
                 raise ManagerEventError("Compra financeira vinculada ao evento não encontrada.")

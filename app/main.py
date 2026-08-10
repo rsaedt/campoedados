@@ -8,6 +8,7 @@ from app.api.admin_channels import router as admin_channels_router
 from app.api.channels import router as channels_router
 from app.api.dashboard import router as dashboard_router
 from app.api.dashboard_channel_links import router as dashboard_channel_links_router
+from app.api.dashboard_consumption import router as dashboard_consumption_router
 from app.api.dashboard_decision import router as dashboard_decision_router
 from app.api.dashboard_feed_mill import router as dashboard_feed_mill_router
 from app.api.dashboard_workspace_ui import router as dashboard_ui_router
@@ -19,13 +20,14 @@ from app.api.web_auth import router as web_auth_router
 from app.core.database import database_is_ready
 from app.services.media_storage import media_storage_backend, media_storage_is_configured
 
-app = FastAPI(title="Campo e Dados", version="0.7.6")
+app = FastAPI(title="Campo e Dados", version="0.7.7")
 app.include_router(dashboard_ui_router)
 app.include_router(web_auth_router)
 app.include_router(dashboard_router)
 app.include_router(dashboard_channel_links_router)
 app.include_router(dashboard_decision_router)
 app.include_router(dashboard_feed_mill_router)
+app.include_router(dashboard_consumption_router)
 app.include_router(me_router)
 app.include_router(operator_router)
 app.include_router(media_router)
@@ -43,7 +45,7 @@ def root():
 @app.get("/health")
 def health():
     """Liveness: confirma apenas que o processo HTTP está vivo."""
-    return {"status": "ok", "service": "campoedados", "version": "0.7.6"}
+    return {"status": "ok", "service": "campoedados", "version": "0.7.7"}
 
 
 @app.get("/ready")
@@ -58,7 +60,7 @@ def ready(response: Response):
     return {
         "status": "ready" if is_ready else "not_ready",
         "service": "campoedados",
-        "version": "0.7.6",
+        "version": "0.7.7",
         "environment": os.getenv("CAMPOEDADOS_ENV", "development"),
         "database": "ready" if db_ready else "unavailable",
         "media_storage": {
@@ -74,6 +76,11 @@ def ready(response: Response):
         "permission_aware_module_navigation": True,
         "hidden_unavailable_modules": True,
         "feed_mill_workspace": True,
+        "farm_level_inventory": True,
+        "natural_consumption": True,
+        "consumption_analytics": True,
+        "operator_user_channel": "telegram",
+        "dashboard_operational_entry": False,
         "web_user_login": True,
         "web_session_cookie": True,
         "dashboard_inventory_adjustment": True,

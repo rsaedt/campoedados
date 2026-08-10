@@ -119,12 +119,17 @@ def test_ready_returns_200_when_required_dependencies_are_ready(monkeypatch):
     body = response.json()
     assert body["status"] == "ready"
     assert body["environment"] == "staging"
-    assert body["version"] == "0.7.6"
+    assert body["version"] == "0.7.7"
     assert body["dashboard"] is True
     assert body["decision_overview"] is True
     assert body["permission_aware_module_navigation"] is True
     assert body["hidden_unavailable_modules"] is True
     assert body["feed_mill_workspace"] is True
+    assert body["farm_level_inventory"] is True
+    assert body["natural_consumption"] is True
+    assert body["consumption_analytics"] is True
+    assert body["operator_user_channel"] == "telegram"
+    assert body["dashboard_operational_entry"] is False
     assert body["web_user_login"] is True
     assert body["web_session_cookie"] is True
     assert body["telegram_dashboard_connect"] is True
