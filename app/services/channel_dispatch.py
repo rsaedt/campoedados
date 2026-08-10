@@ -12,7 +12,7 @@ from app.services.channels.base import ChannelDispatchResult, ChannelTransport, 
 from app.services.media_storage import FileSystemMediaStorage
 from app.services.multimodal import process_audio_media, process_invoice_media
 from app.services.openai_multimodal import MultimodalAI
-from app.services.operator import handle_operator_message
+from app.services.operator_natural import handle_operator_message_natural
 
 
 UNKNOWN_CONTACT_REPLY = (
@@ -33,6 +33,15 @@ def format_operator_reply(response: OperatorMessageResponse) -> str:
     if response.question:
         prefix = "⚠️ " if response.status in {"waiting_manager", "waiting_complement"} else ""
         return prefix + response.question
+
+    if response.consumption:
+        c = response.consumption
+        context = f" — {c.context_label}" if c.context_label else ""
+        return (
+            f"✅ Consumo registrado: {_format_decimal(c.quantity)} {c.base_unit} de {c.product_name}. "
+            f"Destino: {c.purpose_label}{context}. "
+            f"Saldo em {c.unit_code}: {_format_decimal(c.remaining_quantity)} {c.base_unit}."
+        )
 
     if response.production:
         p = response.production
@@ -123,7 +132,7 @@ def dispatch_channel_message(
     unit = resolved.unit
 
     if inbound.media is None:
-        response = handle_operator_message(
+        response = handle_operator_message_natural(
             session,
             principal=principal,
             request=OperatorMessageRequest(
