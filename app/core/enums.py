@@ -36,6 +36,7 @@ class MovementType(StrEnum):
     PRODUCTION_OUTPUT = "production_output"
     TRANSFER_DISPATCH = "transfer_dispatch"
     TRANSFER_RECEIPT = "transfer_receipt"
+    CONSUMPTION = "consumption"
     ADJUSTMENT = "adjustment"
 
 
