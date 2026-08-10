@@ -128,11 +128,11 @@ def test_telegram_consumption_decrements_farm_stock_and_classifies_livestock(ses
     assert body["event_type"] == "inventory.consumption"
     assert body["target_modules"] == ["livestock"]
     assert body["consumption"]["product_name"] == "Milho"
-    assert body["consumption"]["quantity"] == "50.0000"
+    assert Decimal(str(body["consumption"]["quantity"])) == Decimal("50")
     assert body["consumption"]["purpose_code"] == "livestock"
     assert body["consumption"]["purpose_label"] == "Pecuária"
     assert body["consumption"]["context_label"] == "Cavalos"
-    assert body["consumption"]["remaining_quantity"] == "450.0000"
+    assert Decimal(str(body["consumption"]["remaining_quantity"])) == Decimal("450")
 
     balance = session.scalar(
         select(InventoryBalance).where(
@@ -175,8 +175,8 @@ def test_sack_is_converted_using_registered_package_weight_without_extra_questio
     body = response.json()
     assert body["status"] == "processed"
     assert body["question"] is None
-    assert body["consumption"]["quantity"] == "50.0000"
-    assert body["consumption"]["remaining_quantity"] == "150.0000"
+    assert Decimal(str(body["consumption"]["quantity"])) == Decimal("50")
+    assert Decimal(str(body["consumption"]["remaining_quantity"])) == Decimal("150")
 
 
 def test_consumption_without_explicit_destination_defaults_to_farm_use(session):
@@ -205,7 +205,7 @@ def test_consumption_without_explicit_destination_defaults_to_farm_use(session):
 
 
 def test_consumption_never_creates_negative_stock_and_goes_to_manager(session):
-    _org, _unit, _milho, raw = _setup(session, initial_quantity="10")
+    _org, _unit, milho, raw = _setup(session, initial_quantity="10")
     client = _client(session)
     try:
         response = client.post(
@@ -227,5 +227,97 @@ def test_consumption_never_creates_negative_stock_and_goes_to_manager(session):
     assert body["status"] == "waiting_manager"
     assert body["consumption"] is None
 
-    balance = session.scalar(select(InventoryBalance).where(InventoryBalance.product_id == _milho.id))
+    balance = session.scalar(select(InventoryBalance).where(InventoryBalance.product_id == milho.id))
     assert Decimal(balance.quantity) == Decimal("10.0000")
+
+
+def test_manager_approval_retries_real_consumption_after_stock_is_replenished(session):
+    org, unit, milho, operator_raw = _setup(session, initial_quantity="10")
+
+    manager_user = User(display_name="Gerente SH7", active=True)
+    session.add(manager_user)
+    session.flush()
+    manager_membership = Membership(
+        organization_id=org.id,
+        user_id=manager_user.id,
+        role="manager",
+        active=True,
+    )
+    session.add(manager_membership)
+    session.flush()
+    session.add(
+        UserModulePermission(
+            membership_id=manager_membership.id,
+            module_code="livestock",
+            can_view=True,
+            can_register=False,
+            can_approve=True,
+            can_configure=False,
+        )
+    )
+    _, manager_raw = issue_access_token(
+        session,
+        membership_id=manager_membership.id,
+        raw_token="natural-consumption-manager",
+    )
+    session.commit()
+
+    client = _client(session)
+    try:
+        blocked = client.post(
+            "/v1/operator/messages",
+            headers={"Authorization": f"Bearer {operator_raw}"},
+            json={
+                "text": "Tratei 50 kg de milho pros cavalos.",
+                "unit_code": "SH7",
+                "channel": "telegram",
+                "source_type": "text",
+                "external_id": "tg-consumo-retry",
+            },
+        )
+        assert blocked.status_code == 200, blocked.text
+        event_id = blocked.json()["event_id"]
+        assert blocked.json()["status"] == "waiting_manager"
+
+        # O gerente não pode aprovar enquanto a realidade física não mudou.
+        still_blocked = client.post(
+            f"/v1/manager/events/{event_id}/decision",
+            headers={"Authorization": f"Bearer {manager_raw}"},
+            json={"decision": "approve"},
+        )
+        assert still_blocked.status_code == 422, still_blocked.text
+
+        balance = session.scalar(select(InventoryBalance).where(InventoryBalance.product_id == milho.id))
+        assert Decimal(balance.quantity) == Decimal("10.0000")
+        assert session.scalar(
+            select(ConsumptionRecord).where(ConsumptionRecord.event_id == event_id)
+        ) is None
+
+        # Quando o estoque realmente passa a existir, a mesma decisão executa a baixa real.
+        receive_stock(
+            session,
+            organization_id=org.id,
+            unit_id=unit.id,
+            product_id=milho.id,
+            quantity=Decimal("50"),
+            unit_cost=Decimal("2.50"),
+            movement_type="receipt",
+            reference_type="test_replenishment",
+        )
+        session.commit()
+
+        approved = client.post(
+            f"/v1/manager/events/{event_id}/decision",
+            headers={"Authorization": f"Bearer {manager_raw}"},
+            json={"decision": "approve"},
+        )
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["status"] == "processed"
+    finally:
+        app.dependency_overrides.clear()
+
+    balance = session.scalar(select(InventoryBalance).where(InventoryBalance.product_id == milho.id))
+    assert Decimal(balance.quantity) == Decimal("10.0000")
+    record = session.scalar(select(ConsumptionRecord).where(ConsumptionRecord.event_id == event_id))
+    assert record is not None
+    assert Decimal(record.quantity) == Decimal("50.0000")
